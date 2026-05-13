@@ -26,7 +26,7 @@ MAX_VIDEO_DURATION_SEC: float  = 600.0     # Support up to 10 minutes
 SEGMENT_DURATION_SEC: float    = 15.0      # Each analysis window
 FRAMES_PER_SEGMENT: int        = 16        # Frames sampled per segment
 MAX_SEGMENTS_PER_CHUNK: int    = 8         # Chunk size for long videos
-SUPPORTED_FORMATS: List[str]   = [".mp4", ".mov", ".avi", ".webm", ".mkv"]
+SUPPORTED_FORMATS: List[str]   = [".mp4", ".mov", ".avi", ".webm", ".mkv", ".m4v"]
 THUMBNAIL_SIZE: Tuple[int, int] = (320, 180)
 
 
@@ -298,8 +298,8 @@ def download_youtube_video(url: str, output_dir: Optional[str] = None) -> str:
     out_template = os.path.join(output_dir, "yt_%(id)s.%(ext)s")
 
     ydl_opts = {
-        # Single pre-merged format — no ffmpeg needed
-        "format":      "best[ext=mp4][height<=720]/best[ext=mp4]/best[height<=720]/best",
+        # Format fallback chain: prefer mp4, accept anything available
+        "format":      "best[ext=mp4]/best",
         "outtmpl":     out_template,
         "quiet":       True,
         "no_warnings": True,
