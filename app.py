@@ -90,14 +90,22 @@ with st.sidebar:
 
 # ── Input Section ─────────────────────────────────────────────────────────────
 st.markdown("### 📥 Video Input")
-input_tab1, input_tab2 = st.tabs(["📂 Upload Video File", "🎬 YouTube / URL"])
+st.markdown("<small style='color:#9CA3AF'>Choose one: Upload a local file OR paste a YouTube link below</small>", unsafe_allow_html=True)
 
 vpath = None
 source_label = ""
 
-with input_tab1:
+inp_col1, inp_divider, inp_col2 = st.columns([5, 0.3, 5])
+
+with inp_col1:
+    st.markdown("""
+    <div style='background:#1F2937;border-radius:12px;padding:16px 20px;border:1px solid #374151;min-height:140px;'>
+    <div style='color:#34D399;font-weight:700;font-size:1rem;margin-bottom:8px;'>📂 Upload Video File</div>
+    <div style='color:#9CA3AF;font-size:.82rem;margin-bottom:12px;'>MP4 / MOV / AVI — up to 10 minutes</div>
+    </div>
+    """, unsafe_allow_html=True)
     uploaded = st.file_uploader(
-        "Upload Football Video (MP4 / MOV / AVI — supports up to 10 min)",
+        "Upload video", label_visibility="collapsed",
         type=["mp4","mov","avi"]
     )
     if uploaded:
@@ -106,21 +114,35 @@ with input_tab1:
         tf.write(uploaded.read()); tf.close()
         vpath = tf.name
         source_label = f"📂 {uploaded.name}"
+        st.success(f"✅ File ready: {uploaded.name}")
 
-with input_tab2:
+with inp_divider:
+    st.markdown("""
+    <div style='display:flex;align-items:center;justify-content:center;height:140px;'>
+    <div style='background:#374151;width:2px;height:100px;border-radius:2px;margin:0 auto;'></div>
+    </div>
+    <div style='text-align:center;color:#6B7280;font-size:.8rem;font-weight:700;margin-top:-20px;'>OR</div>
+    """, unsafe_allow_html=True)
+
+with inp_col2:
+    st.markdown("""
+    <div style='background:#1F2937;border-radius:12px;padding:16px 20px;border:1px solid #374151;min-height:140px;'>
+    <div style='color:#60A5FA;font-weight:700;font-size:1rem;margin-bottom:8px;'>🎬 YouTube / URL</div>
+    <div style='color:#9CA3AF;font-size:.82rem;margin-bottom:12px;'>Standard YouTube, Shorts, or direct MP4 link</div>
+    </div>
+    """, unsafe_allow_html=True)
     yt_url = st.text_input(
-        "Paste YouTube Video Link",
-        placeholder="https://www.youtube.com/watch?v=... or YouTube Shorts URL",
-        help="Supports standard YouTube, Shorts, and direct MP4 links"
+        "YouTube link", label_visibility="collapsed",
+        placeholder="https://www.youtube.com/watch?v=...",
     )
-    yt_btn = st.button("⬇️ Download & Analyse", type="primary", use_container_width=True)
+    yt_btn = st.button("⬇️ Download & Load YouTube Video", type="primary", use_container_width=True)
     if yt_btn and yt_url.strip():
-        from video_processing import download_youtube_video, is_youtube_url, VideoProcessingError
+        from video_processing import download_youtube_video, VideoProcessingError
         with st.spinner("⬇️ Downloading YouTube video…"):
             try:
                 vpath = download_youtube_video(yt_url.strip())
-                source_label = f"🎬 YouTube: {yt_url[:60]}…"
-                st.success(f"✅ Downloaded successfully!")
+                source_label = f"🎬 YouTube: {yt_url[:55]}…"
+                st.success("✅ Downloaded successfully!")
             except VideoProcessingError as e:
                 st.error(f"❌ Download failed: {e}")
             except Exception as e:
@@ -487,4 +509,11 @@ if "results" in st.session_state:
     with d3: st.download_button("⬇️ Timeline",    tl_txt,   "event_timeline.txt",    "text/plain",        use_container_width=True)
 
 st.markdown("---")
-st.markdown('<p style="text-align:center;color:#374151;font-size:.8rem;">⚽ Football Intelligence Platform · X-CLIP + Optical Flow · YouTube Support · Python 3.11 · Built with Streamlit</p>', unsafe_allow_html=True)
+st.markdown("""
+<div style='text-align:center;padding:12px 0 4px 0;'>
+  <span style='color:#6B7280;font-size:.82rem;'>⚽ Football Intelligence Platform &nbsp;·&nbsp; X-CLIP + Optical Flow &nbsp;·&nbsp; YouTube Support &nbsp;·&nbsp; Python 3.11</span><br>
+  <span style='color:#34D399;font-size:.88rem;font-weight:700;'>Built by Abhishek</span>
+  <span style='color:#6B7280;font-size:.88rem;'> &nbsp;|&nbsp; </span>
+  <span style='color:#60A5FA;font-size:.88rem;font-weight:600;'>Assignment for MultiTV Solutions</span>
+</div>
+""", unsafe_allow_html=True)
