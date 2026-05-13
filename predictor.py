@@ -196,22 +196,48 @@ class FootballActionPredictor:
     def available_labels(self) -> List[str]:
         return self._short_labels
 
+    # ── ImageNet normalization constants (used by X-CLIP) ────────────────────
+    _MEAN = [0.48145466, 0.4578275,  0.40821073]
+    _STD  = [0.26862954, 0.26130258, 0.27577711]
+
+    def _frames_to_tensor(self, frames: List[Image.Image]) -> "torch.Tensor":
+        """
+        Manually convert PIL frames → float32 tensor of shape (1, T, 3, 224, 224).
+        Bypasses XCLIPProcessor video path to avoid shape mismatches.
+        """
+        import numpy as np
+        mean = np.array(self._MEAN, dtype=np.float32)
+        std  = np.array(self._STD,  dtype=np.float32)
+        processed = []
+        for img in frames:
+            img_rgb = img.convert("RGB").resize((224, 224), Image.LANCZOS)
+            arr = np.array(img_rgb, dtype=np.float32) / 255.0
+            arr = (arr - mean) / std          # HWC
+            arr = arr.transpose(2, 0, 1)      # CHW
+            processed.append(arr)
+        # Stack → (T, C, H, W) then unsqueeze → (1, T, C, H, W)
+        video_np = np.stack(processed, axis=0)
+        return self.torch.tensor(video_np).unsqueeze(0)
+
     def predict_segment(self, frames: List[Image.Image]) -> List[Dict]:
         """
         Classify actions in one video segment.
-
         Returns list of top-K dicts: { label, confidence, rank }
-        Confidence values are normalized to realistic football-analytics range.
         """
         sampled = self._sample_frames(frames, n=8)
 
-        inputs = self.processor(
+        # ── Text encoding via processor ───────────────────────────────────────
+        text_inputs = self.processor(
             text=self._prompts,
-            videos=[sampled],   # X-CLIP expects list-of-videos: [[f1,f2,...]]
             return_tensors="pt",
             padding=True,
         )
-        inputs = {k: v.to(self.device) for k, v in inputs.items()}
+        text_inputs = {k: v.to(self.device) for k, v in text_inputs.items()}
+
+        # ── Video encoding — manually built tensor ────────────────────────────
+        pixel_values = self._frames_to_tensor(sampled).to(self.device)
+        # X-CLIP forward: pixel_values shape must be (B, T, C, H, W)
+        inputs = {**text_inputs, "pixel_values": pixel_values}
 
         with self.torch.no_grad():
             outputs = self.model(**inputs)
@@ -233,6 +259,7 @@ class FootballActionPredictor:
             {"label": lbl, "confidence": conf, "rank": i + 1}
             for i, (lbl, conf) in enumerate(sorted_scores[: self.top_k])
         ]
+
 
     def predict_all_segments(
         self,
