@@ -131,24 +131,26 @@ with inp_col2:
     <div style='color:#9CA3AF;font-size:.82rem;margin-bottom:12px;'>Standard YouTube, Shorts, or direct MP4 link</div>
     </div>
     """, unsafe_allow_html=True)
-    yt_url = st.text_input(
-        "YouTube link", label_visibility="collapsed",
-        placeholder="https://www.youtube.com/watch?v=...",
-    )
-    yt_btn = st.button("▶️ Load & Analyse YouTube Video", type="primary", use_container_width=True)
-    if yt_btn and yt_url.strip():
-        from video_processing import get_youtube_stream_url, VideoProcessingError as VPE
-        with st.spinner("🔗 Extracting YouTube stream URL (no download needed)…"):
-            try:
-                stream_url, yt_title, yt_dur = get_youtube_stream_url(yt_url.strip())
-                st.session_state["yt_stream_url"] = stream_url
-                st.session_state["yt_title"]      = yt_title
-                st.session_state["yt_duration"]   = yt_dur
-                st.success(f"✅ Stream ready: **{yt_title}** ({yt_dur:.0f}s)")
-            except VPE as e:
-                st.error(f"❌ Stream failed: {e}")
-            except Exception as e:
-                st.error(f"❌ Unexpected error: {e}")
+    st.markdown("""
+    <div style='background:#1F2937;border-radius:12px;padding:16px 20px;border:1px solid #374151;'>
+    <div style='color:#60A5FA;font-weight:700;font-size:1rem;margin-bottom:8px;'>🎬 YouTube / URL &nbsp; <span style='background:#1E3A5F;color:#60A5FA;font-size:.7rem;padding:2px 8px;border-radius:10px;font-weight:700;'>🚧 COMING SOON</span></div>
+    <div style='color:#9CA3AF;font-size:.82rem;margin-bottom:8px;'>Standard YouTube, Shorts, or direct MP4 link</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.info("""
+**🚧 YouTube Direct Integration — Coming Soon**
+
+YouTube's server-side bot-detection policy currently blocks automated video access (HTTP 403 / Format Not Available errors), even with tools like `yt-dlp`.
+
+**✅ Workaround (takes 30 seconds):**
+1. Open the YouTube video in your browser
+2. Download it free at 👉 [yt1s.com](https://yt1s.com) or [snapsave.app](https://snapsave.app)
+3. Upload the downloaded MP4 using **📂 Upload Video File** on the left
+
+**🔮 Planned Fix:** YouTube Data API v3 with OAuth2 authentication (requires API key quota).
+""")
+
 
 # ── Video Info + Analysis ─────────────────────────────────────────────────────
 from video_processing import VideoProcessor, VideoProcessingError, format_timestamp, YouTubeStreamProcessor

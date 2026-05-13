@@ -1,31 +1,83 @@
-# 🎥 AI Video Action Recognition System
+# ⚽ Football Intelligence Platform
 
-![Python](https://img.shields.io/badge/Python-3.9%2B-blue)
-![Streamlit](https://img.shields.io/badge/Streamlit-1.34.0-FF4B4B)
-![PyTorch](https://img.shields.io/badge/PyTorch-2.3.0-EE4C2C)
-![Transformers](https://img.shields.io/badge/HuggingFace-Transformers-F9AB00)
-![OpenCV](https://img.shields.io/badge/OpenCV-4.9.0-5C3EE8)
+![Python](https://img.shields.io/badge/Python-3.11.9-blue)
+![Streamlit](https://img.shields.io/badge/Streamlit-1.35+-FF4B4B)
+![PyTorch](https://img.shields.io/badge/PyTorch-2.3+-EE4C2C)
+![Transformers](https://img.shields.io/badge/HuggingFace-X--CLIP-F9AB00)
+![OpenCV](https://img.shields.io/badge/OpenCV-4.9+-5C3EE8)
+![Assignment](https://img.shields.io/badge/Assignment-MultiTV%20Solutions-00C851)
 
-A production-ready **Zero-Shot Video Action Recognition System** built to dynamically classify human actions in videos without requiring task-specific model fine-tuning. 
+> **Built by Abhishek** | Assignment for **MultiTV Solutions**
 
-Powered by **HuggingFace's X-CLIP** (`microsoft/xclip-base-patch32`) and a highly interactive **Streamlit** dashboard, this system extracts video frames, processes them in segments, and applies deep learning to predict custom actions with high confidence.
+A production-ready **AI-powered Football Video Analytics Platform** built using Microsoft X-CLIP, Streamlit, and OpenCV. Upload any football video and get real-time action detection, timestamp-based event analysis, motion heatmaps, professional commentary, and an advanced AI match summary — all in a premium dark dashboard.
 
 ---
 
 ## ✨ Key Features
-- **🧠 Zero-Shot Classification**: Dynamically input *any* action text (e.g., "Walking", "Playing Sports") directly from the UI. The AI adapts instantly.
-- **🚀 Optimized Inference**: Uses frame skipping and segment batching to accelerate inference by 80% compared to brute-force frame-by-frame analysis.
-- **📊 Analytics Dashboard**: Built-in Plotly Gantt charts for a chronological action timeline and Donut charts for action distribution.
-- **🎨 Premium UI/UX**: Dark-themed, glassmorphic UI cards, animated progress bars, and real-time processing metrics.
-- **☁️ Deployment Ready**: Pre-configured for immediate deployment on Streamlit Community Cloud and HuggingFace Spaces.
+
+| Feature | Description |
+|---------|-------------|
+| 🧠 **Zero-Shot AI** | Microsoft X-CLIP classifies 30+ football actions without fine-tuning |
+| 🕐 **Timestamp Events** | Detects actions per segment with exact timestamps (MM:SS) |
+| 🎙️ **AI Commentary** | Broadcast-quality professional football commentary per event |
+| 📊 **Analytics Dashboard** | Pie charts, bar charts, confidence trend line, KPI metrics |
+| 🗺️ **Motion Heatmap** | Optical-flow based pitch activity heatmap (OpenCV) |
+| 🧠 **Advanced Match Summary** | 7-dimension tactical analysis: pressing, transitions, momentum shifts |
+| 📋 **Match Analysis Card** | 15 tactical theme checks + expanded notes |
+| 💾 **Exports** | Download JSON report, CSV, and plain-text timeline |
+| 🎬 **YouTube — Coming Soon** | See section below |
+| 📱 **Long Video Support** | Chunked processing — supports up to 10-minute clips |
 
 ---
 
 ## 🏗️ Architecture
-1. **Video Ingestion**: The user uploads an MP4/AVI file.
-2. **Video Processing (`video_processing.py`)**: OpenCV reads the video and slices it into N-second segments, extracting exactly 8 evenly spaced frames per segment.
-3. **Model Prediction (`predictor.py`)**: Frames are tensorized and passed to the X-CLIP model. The visual embeddings are compared against the textual embeddings of the target labels using cosine similarity to generate probabilities.
-4. **Visualization (`app.py`)**: Results are aggregated and rendered in Streamlit using pandas and Plotly.
+
+```
+Video Upload (MP4/MOV/AVI)
+        ↓
+VideoProcessor (OpenCV)
+   → Frame extraction
+   → Segment splitting (15s chunks)
+        ↓
+FootballActionPredictor (Microsoft X-CLIP)
+   → 30+ football action labels
+   → Confidence normalization (25–93%)
+        ↓
+Football Intelligence Layer (OpenCV Optical Flow)
+   → Motion signature analysis
+   → Zone activity mapping
+   → Football hint injection
+        ↓
+Commentary Engine
+   → Per-event broadcast commentary
+   → Advanced AI match summary (7 dimensions)
+   → Match Analysis Card
+        ↓
+Streamlit Dashboard
+   → Timestamp timeline
+   → Charts, heatmaps, KPIs, exports
+```
+
+---
+
+## 🎬 YouTube Integration — Coming Soon 🚧
+
+> **Current Status: Not Available**
+
+YouTube's aggressive **server-side bot-detection policy** currently blocks all automated video access, returning `HTTP 403 Forbidden` or `Requested format is not available` errors — even when using industry-standard tools like `yt-dlp`.
+
+**Why it fails:**
+- YouTube detects server-side requests as bots and blocks them
+- Format restrictions vary per video and per IP
+- YouTube CDN URLs require valid browser session tokens
+
+**✅ Workaround (takes 30 seconds):**
+1. Open the YouTube football video in your browser
+2. Download it free at [yt1s.com](https://yt1s.com) or [snapsave.app](https://snapsave.app)
+3. Upload the downloaded `.mp4` file using the **📂 Upload Video File** option in the app
+
+**🔮 Planned Fix:**
+YouTube integration will be implemented using the official **YouTube Data API v3** with OAuth2 authentication, which bypasses bot-detection entirely. This requires a Google Cloud API key with quota allocation.
 
 ---
 
@@ -33,14 +85,17 @@ Powered by **HuggingFace's X-CLIP** (`microsoft/xclip-base-patch32`) and a highl
 
 ### 1. Clone the repository
 ```bash
-git clone https://github.com/yourusername/ai-video-action-recognition.git
-cd ai-video-action-recognition
+git clone https://github.com/Abhishek-coder9998/AI-action.git
+cd AI-action
 ```
 
-### 2. Create a Virtual Environment (Recommended)
+### 2. Create a Virtual Environment
 ```bash
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+# Windows:
+venv\Scripts\activate
+# Mac/Linux:
+source venv/bin/activate
 ```
 
 ### 3. Install Dependencies
@@ -49,37 +104,46 @@ pip install -r requirements.txt
 ```
 
 ### 4. Run the Application
-You have three easy ways to run the app:
+```bash
+streamlit run app.py
+```
 
-*   **Windows (Easiest)**: Double-click `run.bat`. This handles everything for you.
-*   **Mac/Linux**: Run `./run.sh`.
-*   **Manual**: `streamlit run app.py`.
-
----
-
-## 📱 Mobile Access
-This project is optimized for phone viewing. To open the dashboard on your phone:
-1. Run the project using `run.bat` or `run.sh`.
-2. Ensure your phone and PC are on the same Wi-Fi.
-3. **Scan the QR Code** that appears in the sidebar of the app on your PC.
-4. The app will open instantly on your mobile browser!
+Or use the provided scripts:
+- **Windows:** Double-click `run.bat`
+- **Mac/Linux:** `./run.sh`
 
 ---
 
-## ☁️ Deployment Guide
+## ☁️ Streamlit Cloud Deployment
 
-### Deploying to Streamlit Cloud
-1. Push this code to a public GitHub repository.
-2. Go to [share.streamlit.io](https://share.streamlit.io/).
-3. Click "New app" and select your repository, branch, and `app.py` as the main file.
-4. Click **Deploy**.
+1. Push to a public GitHub repository
+2. Go to [share.streamlit.io](https://share.streamlit.io/)
+3. Select your repo → `app.py` → **Deploy**
 
-### Deploying to HuggingFace Spaces
-1. Create a new Space on HuggingFace and select **Streamlit** as the SDK.
-2. Upload all files from this directory to the Space.
-3. The Space will automatically install the `requirements.txt` and launch `app.py`.
+> `runtime.txt` is pre-configured for **Python 3.11.9** for maximum compatibility.
+
+---
+
+## 📁 Project Structure
+
+```
+AI-Video-Action-Recognition/
+├── app.py                  # Main Streamlit application
+├── predictor.py            # X-CLIP model + confidence normalization
+├── video_processing.py     # OpenCV frame extraction + YouTube support
+├── football_intelligence.py# Optical flow + motion analysis layer
+├── commentary.py           # Commentary + advanced AI match summary
+├── exporter.py             # JSON / CSV / Timeline exports
+├── requirements.txt        # Python dependencies
+├── runtime.txt             # Python 3.11.9 for Streamlit Cloud
+└── README.md
+```
 
 ---
 
 ## 👨‍💻 Developed By
-An AI Engineering Project demonstrating proficiency in Computer Vision, Multi-modal Deep Learning (CLIP variants), and Full-Stack AI Application Development.
+
+**Abhishek** — AI/ML Engineer  
+📌 Assignment submission for **MultiTV Solutions**
+
+> Demonstrates proficiency in: Computer Vision · Multi-modal Deep Learning (X-CLIP) · Optical Flow · Streamlit · Full-Stack AI Application Development · Production Deployment

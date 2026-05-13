@@ -207,7 +207,7 @@ class FootballActionPredictor:
 
         inputs = self.processor(
             text=self._prompts,
-            videos=sampled,
+            videos=[sampled],   # X-CLIP expects list-of-videos: [[f1,f2,...]]
             return_tensors="pt",
             padding=True,
         )
