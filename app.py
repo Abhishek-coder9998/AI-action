@@ -14,6 +14,8 @@ from exporter import results_to_json, results_to_csv, build_timeline_text
 
 st.set_page_config(page_title="⚽ Football AI Analytics", page_icon="⚽", layout="wide")
 
+st.write("App started successfully")
+
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
