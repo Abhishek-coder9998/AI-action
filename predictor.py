@@ -222,37 +222,47 @@ class FootballActionPredictor:
     def predict_segment(self, frames: List[Image.Image]) -> List[Dict]:
         """
         Classify actions in one video segment.
-        Returns list of top-K dicts: { label, confidence, rank }
+        VERSION: 3.0.N (Nuclear Fix)
         """
         sampled = self._sample_frames(frames, n=8)
 
-        # 1. Text processing (processor is reliable for text)
+        # 1. Text encoding
         text_enc = self.processor(
             text=self._prompts,
             padding=True,
             return_tensors="pt"
         ).to(self.device)
 
-        # 2. Video processing (manual to avoid processor bugs)
-        pixel_values = self._frames_to_tensor(sampled).to(self.device)
+        # 2. Video encoding (Using processor's preprocessor directly for safety)
+        # This guarantees the processor's exact normalization/resize logic
+        video_enc = self.processor(
+            videos=[sampled],
+            return_tensors="pt"
+        ).to(self.device)
 
-        # Log for debugging (visible in Streamlit logs)
-        logger.info(f"Predicting: text_ids={text_enc.input_ids.shape}, pixel_values={pixel_values.shape}")
+        # 3. Explicitly verify pixel_values existence
+        pixel_values = video_enc.get("pixel_values")
+        if pixel_values is None:
+            # Fallback to manual if processor fails
+            logger.warning("Processor returned None for pixel_values. Using manual fallback.")
+            pixel_values = self._frames_to_tensor(sampled).to(self.device).float()
+
+        # Log for Cloud Debugging
+        logger.info(f"[V3.0.N] Calling X-CLIP: input_ids={text_enc.input_ids.shape}, pixel_values={pixel_values.shape}")
 
         with self.torch.no_grad():
-            # Call model with explicit keyword arguments to avoid NoneType issues
+            # Nuclear Forward: Pass only the 3 mandatory tensors
             outputs = self.model(
                 input_ids=text_enc.input_ids,
                 attention_mask=text_enc.attention_mask,
-                pixel_values=pixel_values,
+                pixel_values=pixel_values.float(), # Force float32
                 return_dict=True
             )
 
-        logits    = outputs.logits_per_video         # [1, num_labels]
+        logits    = outputs.logits_per_video
         raw_probs = logits.softmax(dim=1).cpu().numpy()[0]
-
-        # Normalize confidence to realistic range
         norm_probs = self._normalizer.normalize(raw_probs, top_k=self.top_k)
+
 
 
         # Build results dict
