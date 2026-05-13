@@ -1,20 +1,11 @@
-"""app.py — Football Action Recognition AI (Advanced Dashboard)"""
+"""app.py — Football Intelligence Platform (Production v3)"""
 
 import streamlit as st
-import os, tempfile, socket
+import os, tempfile
 import pandas as pd
 import numpy as np
-import plotly.graph_objects as go
-import plotly.express as px
-from video_processing import VideoProcessor, VideoProcessingError, format_timestamp
-from predictor import FootballActionPredictor
-from commentary import generate_full_commentary, generate_match_summary, generate_match_analysis_card
-from football_intelligence import analyze_motion_signature, build_heatmap_data, boost_confidence_with_hints
-from exporter import results_to_json, results_to_csv, build_timeline_text
 
-st.set_page_config(page_title="⚽ Football AI Analytics", page_icon="⚽", layout="wide")
-
-st.write("App started successfully")
+st.set_page_config(page_title="⚽ Football Intelligence Platform", page_icon="⚽", layout="wide")
 
 st.markdown("""
 <style>
@@ -22,16 +13,17 @@ st.markdown("""
 *{font-family:'Inter',sans-serif;}
 .hero{font-size:2.6rem;font-weight:900;text-align:center;
   background:linear-gradient(135deg,#00C851,#007E33,#FFD700);
-  -webkit-background-clip:text;-webkit-text-fill-color:transparent;}
-.sub{text-align:center;color:#9CA3AF;margin-bottom:1.5rem;}
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:.3rem;}
+.sub{text-align:center;color:#9CA3AF;margin-bottom:1.5rem;font-size:1rem;}
 .card{background:#1F2937;border-radius:12px;padding:16px;border:1px solid #374151;margin:6px 0;}
 .ev-card{background:#111827;border-radius:10px;padding:12px 16px;margin:5px 0;border-left:4px solid #00C851;}
 .badge{display:inline-block;padding:3px 12px;border-radius:20px;font-size:.75rem;font-weight:700;background:#065F46;color:#6EE7B7;}
 .comm{background:#0F172A;border-radius:8px;border-left:4px solid #FFD700;padding:10px 14px;color:#E5E7EB;font-style:italic;margin:3px 0;}
-.chk{color:#34D399;font-weight:700;}
 .mval{font-size:2rem;font-weight:800;color:#34D399;}
 .mlbl{font-size:.78rem;color:#9CA3AF;margin-top:4px;}
 .mcrd{background:#1F2937;border-radius:12px;padding:16px;text-align:center;border:1px solid #374151;}
+.tl-card{background:#111827;border-radius:10px;padding:10px 14px;margin:4px 0;border-left:4px solid #6366F1;}
+.section-title{font-size:1.3rem;font-weight:700;color:#F9FAFB;margin:1.2rem 0 .6rem 0;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -64,76 +56,111 @@ def emo(lbl): return EMOJIS.get(lbl,"🔵")
 
 @st.cache_resource(show_spinner=False)
 def load_model():
+    from predictor import FootballActionPredictor
     return FootballActionPredictor(top_k=6)
 
+def is_cloud():
+    return os.environ.get("STREAMLIT_SHARING_MODE") == "streamlit" or \
+           "streamlit.io" in os.environ.get("SERVER_NAME","")
+
 # ── Header ────────────────────────────────────────────────────────────────────
-st.markdown('<p class="hero">⚽ Football AI Analytics Platform</p>', unsafe_allow_html=True)
-st.markdown('<p class="sub">Upload a football clip (max 40 s) • AI detects 6+ actions per 15-second segment • Motion intelligence • Professional commentary</p>', unsafe_allow_html=True)
+st.markdown('<p class="hero">⚽ Football Intelligence Platform</p>', unsafe_allow_html=True)
+st.markdown('<p class="sub">AI-Powered Action Recognition • YouTube & Video Upload • Timestamp Event Detection • Professional Analytics</p>', unsafe_allow_html=True)
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("## ⚙️ Configuration")
     sport_mode  = st.selectbox("🏟️ Mode", ["football","general"], index=0)
-    segment_sec = st.slider("📐 Segment Duration (s)", 5.0, 15.0, 15.0, 5.0)
+    segment_sec = st.slider("📐 Segment Duration (s)", 5.0, 30.0, 15.0, 5.0)
     top_k       = st.slider("🏆 Top Actions Shown", 3, 8, 6)
     show_comm   = st.toggle("🎙️ Commentary", value=True)
     show_heat   = st.toggle("🗺️ Motion Heatmap", value=True)
     show_table  = st.toggle("📋 Detail Table", value=True)
+    show_tl_table = st.toggle("📊 Event Table View", value=True)
     st.markdown("---")
     st.markdown("""
 **Pipeline**  
-`Video` → `Frame Extract` → `X-CLIP` → `Confidence Normalize` → `Motion Analysis` → `Commentary`  
+`Input` → `Frame Extract` → `X-CLIP` → `Confidence Normalize` → `Motion Analysis` → `Commentary`
 
 **Model**: Microsoft X-CLIP (HuggingFace)  
 **Actions**: 30+ football labels  
 **Confidence**: Normalized 25–93%  
+**New**: YouTube • Long Video • Timestamps
 """)
 
-    st.markdown("---")
-    try:
-        # Detect local IP for phone access
-        hostname = socket.gethostname()
-        local_ip = socket.gethostbyname(hostname)
-        st.markdown(f"### 📱 Mobile Access")
-        st.markdown(f"Scan to open on phone:")
-        qr_url = f"https://chart.googleapis.com/chart?chs=200x200&cht=qr&chl=http://{local_ip}:8501"
-        st.image(qr_url, caption=f"http://{local_ip}:8501")
-        st.caption("Ensure phone is on the same Wi-Fi.")
-    except:
-        pass
+# ── Input Section ─────────────────────────────────────────────────────────────
+st.markdown("### 📥 Video Input")
+input_tab1, input_tab2 = st.tabs(["📂 Upload Video File", "🎬 YouTube / URL"])
 
-# ── Upload ────────────────────────────────────────────────────────────────────
-uploaded = st.file_uploader("📂 Upload Football Video (MP4 / MOV / AVI — max 40 s)", type=["mp4","mov","avi"])
+vpath = None
+source_label = ""
 
-if uploaded:
-    suf   = os.path.splitext(uploaded.name)[1] or ".mp4"
-    tf    = tempfile.NamedTemporaryFile(delete=False, suffix=suf)
-    tf.write(uploaded.read()); tf.close()
-    vpath = tf.name
+with input_tab1:
+    uploaded = st.file_uploader(
+        "Upload Football Video (MP4 / MOV / AVI — supports up to 10 min)",
+        type=["mp4","mov","avi"]
+    )
+    if uploaded:
+        suf = os.path.splitext(uploaded.name)[1] or ".mp4"
+        tf  = tempfile.NamedTemporaryFile(delete=False, suffix=suf)
+        tf.write(uploaded.read()); tf.close()
+        vpath = tf.name
+        source_label = f"📂 {uploaded.name}"
+
+with input_tab2:
+    yt_url = st.text_input(
+        "Paste YouTube Video Link",
+        placeholder="https://www.youtube.com/watch?v=... or YouTube Shorts URL",
+        help="Supports standard YouTube, Shorts, and direct MP4 links"
+    )
+    yt_btn = st.button("⬇️ Download & Analyse", type="primary", use_container_width=True)
+    if yt_btn and yt_url.strip():
+        from video_processing import download_youtube_video, is_youtube_url, VideoProcessingError
+        with st.spinner("⬇️ Downloading YouTube video…"):
+            try:
+                vpath = download_youtube_video(yt_url.strip())
+                source_label = f"🎬 YouTube: {yt_url[:60]}…"
+                st.success(f"✅ Downloaded successfully!")
+            except VideoProcessingError as e:
+                st.error(f"❌ Download failed: {e}")
+            except Exception as e:
+                st.error(f"❌ Unexpected error: {e}")
+
+# ── Video Info + Analysis ─────────────────────────────────────────────────────
+if vpath and os.path.exists(vpath):
+    from video_processing import VideoProcessor, VideoProcessingError, format_timestamp
+    from football_intelligence import analyze_motion_signature, build_heatmap_data
 
     c1, c2 = st.columns([3,2])
     with c1:
-        st.subheader("📽️ Uploaded Clip")
-        st.video(vpath)
+        st.subheader("📽️ Video Preview")
+        if source_label.startswith("📂"):
+            st.video(vpath)
+        else:
+            st.info("📽️ YouTube video downloaded — preview not shown. Click Analyse to process.")
     with c2:
         st.subheader("📋 Video Info")
         try:
-            vp = VideoProcessor(vpath); vp.validate_duration()
+            vp   = VideoProcessor(vpath)
+            vp.validate_duration()
             info = vp.get_info()
-            v_dur = info['duration_sec']
-            
-            # Auto-adjust segment duration if it exceeds video length
+            v_dur = info["duration_sec"]
+
             if segment_sec > v_dur:
-                st.warning(f"⚠️ Segment duration adjusted to match clip length ({v_dur:.1f}s)")
-                effective_segment_sec = v_dur
+                st.warning(f"⚠️ Segment duration adjusted to {v_dur:.1f}s")
+                effective_seg = v_dur
             else:
-                effective_segment_sec = segment_sec
+                effective_seg = segment_sec
 
             a,b = st.columns(2)
             a.metric("⏱️ Duration", f"{v_dur}s")
-            b.metric("🎞️ FPS", info['fps'])
+            b.metric("🎞️ FPS", info["fps"])
             a.metric("📐 Width", f"{info['width']}px")
             b.metric("📏 Height", f"{info['height']}px")
+
+            # Estimate segments
+            n_est = max(1, int(v_dur / effective_seg))
+            st.info(f"📦 Will analyse ~{n_est} segment(s) × {effective_seg:.0f}s each")
             st.success("✅ Valid video — ready to analyse")
             run = st.button("🚀 Analyse Football Actions", type="primary", use_container_width=True)
         except VideoProcessingError as e:
@@ -143,69 +170,68 @@ if uploaded:
 
     if run:
         with st.status("🔬 Running Football AI Pipeline…", expanded=True) as status:
-            st.write("🤖 Loading X-CLIP model…")
+            st.write("🤖 Loading X-CLIP model (cached after first load)…")
             predictor = load_model()
             predictor.top_k = top_k
 
-            st.write(f"🎞️ Extracting {effective_segment_sec:.0f}s segments…")
-            vp2 = VideoProcessor(vpath)
-            segments = vp2.extract_segments(segment_duration=effective_segment_sec)
-            st.write(f"  → {len(segments)} segment(s)")
+            st.write(f"🎞️ Extracting segments ({effective_seg:.0f}s each)…")
+            vp2      = VideoProcessor(vpath)
+            segments = vp2.extract_segments(segment_duration=effective_seg)
+            st.write(f"  → {len(segments)} segment(s) extracted")
 
-            st.write("🧠 Classifying actions (X-CLIP + motion analysis)…")
+            st.write("🧠 Classifying actions with X-CLIP + motion intelligence…")
             prog = st.progress(0)
             ptxt = st.empty()
 
             def on_prog(cur, tot):
-                prog.progress(cur/tot); ptxt.text(f"Segment {cur}/{tot}")
+                prog.progress(cur/tot)
+                ptxt.text(f"Segment {cur}/{tot}")
 
             raw = predictor.predict_all_segments(segments, progress_callback=on_prog)
 
-            # Motion intelligence overlay
             st.write("⚡ Applying football motion intelligence…")
             heatmaps = []
             for i, seg in enumerate(segments):
-                sig = analyze_motion_signature(seg["frames"])
+                sig   = analyze_motion_signature(seg["frames"])
                 hints = sig.get("football_hints", [])
-                
-                # Fallback: If X-CLIP didn't find these hints, inject them
-                detected_labels = [a["label"] for a in raw[i]["top_k_actions"]]
+                detected = [a["label"] for a in raw[i]["top_k_actions"]]
                 for hint in hints:
-                    if hint not in detected_labels:
+                    if hint not in detected:
                         raw[i]["top_k_actions"].append({
-                            "label": hint,
-                            "confidence": 0.45, # high enough to be visible
-                            "rank": len(raw[i]["top_k_actions"]) + 1
+                            "label": hint, "confidence": 0.45, "rank": len(raw[i]["top_k_actions"])+1
                         })
-                
-                # Re-sort and update top action
-                raw[i]["top_k_actions"] = sorted(raw[i]["top_k_actions"], key=lambda x: x["confidence"], reverse=True)[:top_k]
+                raw[i]["top_k_actions"] = sorted(
+                    raw[i]["top_k_actions"], key=lambda x: x["confidence"], reverse=True
+                )[:top_k]
                 raw[i]["top_action"]     = raw[i]["top_k_actions"][0]["label"]
                 raw[i]["top_confidence"] = raw[i]["top_k_actions"][0]["confidence"]
-                
                 raw[i]["motion_signature"] = sig
                 heatmaps.append(build_heatmap_data(seg["frames"]))
 
             st.write("🎙️ Generating professional commentary…")
+            from commentary import generate_full_commentary, generate_match_summary, generate_match_analysis_card
             results = generate_full_commentary(raw)
             summary = generate_match_summary(results)
             card    = generate_match_analysis_card(results)
             status.update(label="✅ Analysis complete!", state="complete")
 
         st.session_state.update({
-            "results":   results,
-            "summary":   summary,
-            "card":      card,
-            "heatmaps":  heatmaps,
-            "vid_info":  vp2.get_info(),
+            "results":  results,
+            "summary":  summary,
+            "card":     card,
+            "heatmaps": heatmaps,
+            "vid_info": vp2.get_info(),
         })
 
-    try: os.remove(vpath)
+    # Cleanup temp file
+    try:
+        if not source_label.startswith("📂"):
+            os.remove(vpath)
     except: pass
 
-# ═══════════════════════════════════════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════════════════════════
 # DASHBOARD
-# ═══════════════════════════════════════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════════════════════════
 if "results" in st.session_state:
     results  = st.session_state["results"]
     summary  = st.session_state["summary"]
@@ -213,38 +239,49 @@ if "results" in st.session_state:
     heatmaps = st.session_state.get("heatmaps", [])
     vinfo    = st.session_state.get("vid_info", {})
 
+    import plotly.graph_objects as go
+    import plotly.express as px
+
     st.markdown("---")
     st.markdown("## 📊 Football Analytics Dashboard")
 
-    # ── Metrics ───────────────────────────────────────────────────────────────
-    m1,m2,m3,m4 = st.columns(4)
-    acts    = [r["top_action"] for r in results]
-    uniq    = list(dict.fromkeys(acts))
-    avg_c   = sum(r["top_confidence"] for r in results)/len(results) if results else 0
+    # ── KPI Metrics ──────────────────────────────────────────────────────────
+    m1,m2,m3,m4,m5 = st.columns(5)
+    acts   = [r["top_action"] for r in results]
+    uniq   = list(dict.fromkeys(acts))
+    avg_c  = sum(r["top_confidence"] for r in results)/len(results) if results else 0
     top_act = max(set(acts), key=acts.count)
+    dur_val = vinfo.get("duration_sec","—")
     for col_m, val, lbl in [
-        (m1, str(len(results)),           "Segments Analysed"),
-        (m2, str(len(uniq)),              "Unique Actions"),
-        (m3, f"{avg_c*100:.0f}%",         "Avg Confidence"),
-        (m4, vinfo.get("duration_sec","—"), "Clip Duration (s)"),
+        (m1, str(len(results)),      "Segments Analysed"),
+        (m2, str(len(uniq)),         "Unique Actions"),
+        (m3, f"{avg_c*100:.0f}%",    "Avg Confidence"),
+        (m4, str(dur_val)+"s",       "Clip Duration"),
+        (m5, top_act[:14],           "Top Action"),
     ]:
-        col_m.markdown(f'<div class="mcrd"><div class="mval">{val}</div><div class="mlbl">{lbl}</div></div>', unsafe_allow_html=True)
+        col_m.markdown(
+            f'<div class="mcrd"><div class="mval">{val}</div><div class="mlbl">{lbl}</div></div>',
+            unsafe_allow_html=True
+        )
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── Match Summary ─────────────────────────────────────────────────────────
+    # ── AI Match Summary ─────────────────────────────────────────────────────
     st.markdown("### 🧠 AI Match Intelligence Summary")
-    st.info(summary)
+    st.markdown(summary)
 
     # ── Match Analysis Card ───────────────────────────────────────────────────
     st.markdown("### 📋 Match Analysis Card")
     with st.container():
-        st.markdown(f'<div class="card"><b>⚽ Overall Match Style:</b> <span style="color:#34D399;font-size:1.1rem;">{card["style"]}</span></div>', unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="card"><b>⚽ Overall Match Style:</b> '
+            f'<span style="color:#34D399;font-size:1.1rem;">{card["style"]}</span></div>',
+            unsafe_allow_html=True
+        )
         checks = card["theme_checks"]
-        cols_per_row = 3
-        items = list(checks.items())
-        for row_start in range(0, len(items), cols_per_row):
-            row = items[row_start:row_start+cols_per_row]
+        items  = list(checks.items())
+        for row_start in range(0, len(items), 3):
+            row  = items[row_start:row_start+3]
             rcols = st.columns(len(row))
             for ci, (theme, detected) in enumerate(row):
                 icon = "✅" if detected else "⬜"
@@ -257,35 +294,93 @@ if "results" in st.session_state:
         rating = card["overall_rating"]
         st.progress(rating/100, text=f"AI Confidence Rating: {rating}%")
 
-    # ── Event Timeline ────────────────────────────────────────────────────────
-    st.markdown("### 🕐 Event Timeline")
+    # ── Timestamp Event Detection ─────────────────────────────────────────────
+    st.markdown("### 🕐 Timestamp Event Detection")
+
+    # Build structured event list
+    event_list = []
     for r in results:
-        ts  = format_timestamp(r["start_time"])
-        tse = format_timestamp(r["end_time"])
-        lbl = r["top_action"]
-        cnf = r["top_confidence"]
-        c   = col(lbl)
-        st.markdown(
-            f'<div class="ev-card" style="border-left-color:{c}">'
-            f'<b>{emo(lbl)} {ts} → {tse}</b> &nbsp;'
-            f'<span class="badge">{lbl}</span> &nbsp;'
-            f'<small style="color:{c}">{cnf*100:.0f}% confidence</small>'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
-        if show_comm and r.get("commentary"):
-            seg_info = f"Segment {r['segment_id']+1} [{ts}-{tse}]"
-            st.markdown(f'<div class="comm">🎙️ <b>{seg_info}:</b> {r["commentary"]}</div>', unsafe_allow_html=True)
+        event_list.append({
+            "action":     r["top_action"],
+            "timestamp":  format_timestamp(r["start_time"]),
+            "ts_end":     format_timestamp(r["end_time"]),
+            "confidence": round(r["top_confidence"]*100, 1),
+            "segment":    r["segment_id"],
+            "start_s":    r["start_time"],
+        })
 
-        # Motion hints badge
-        sig   = r.get("motion_signature", {})
-        hints = sig.get("football_hints", [])
-        if hints:
-            hint_str = " • ".join(hints[:3])
-            st.markdown(f'<small style="color:#6B7280;padding-left:16px;">⚡ Motion intelligence: {hint_str}</small>', unsafe_allow_html=True)
+    # Timeline view + Table view tabs
+    tl_tab1, tl_tab2 = st.tabs(["🔵 Timeline View", "📋 Table View"])
 
-    # ── Top-6 per Segment ─────────────────────────────────────────────────────
-    st.markdown("### 🏆 Top 6 Actions per Segment")
+    with tl_tab1:
+        for ev in event_list:
+            lbl = ev["action"]
+            c_  = col(lbl)
+            # Get tactical explanation from card timeline if available
+            tl  = card.get("event_timeline", [])
+            expl = next((t["explanation"] for t in tl if t["segment_id"]==ev["segment"]), "")
+            st.markdown(
+                f'<div class="ev-card" style="border-left-color:{c_}">'
+                f'<b>{emo(lbl)} {ev["timestamp"]} → {ev["ts_end"]}</b> &nbsp;'
+                f'<span class="badge">{lbl}</span> &nbsp;'
+                f'<small style="color:{c_}">{ev["confidence"]}% confidence</small>'
+                + (f'<br><small style="color:#9CA3AF;margin-top:4px">{expl}</small>' if expl else "")
+                + f'</div>',
+                unsafe_allow_html=True,
+            )
+            if show_comm:
+                r_match = next((r for r in results if r["segment_id"]==ev["segment"]), None)
+                if r_match and r_match.get("commentary"):
+                    st.markdown(
+                        f'<div class="comm">🎙️ <b>Segment {ev["segment"]+1} [{ev["timestamp"]}–{ev["ts_end"]}]:</b> {r_match["commentary"]}</div>',
+                        unsafe_allow_html=True
+                    )
+            # Motion hints
+            r_match2 = next((r for r in results if r["segment_id"]==ev["segment"]), None)
+            if r_match2:
+                hints = r_match2.get("motion_signature",{}).get("football_hints",[])
+                if hints:
+                    st.markdown(
+                        f'<small style="color:#6B7280;padding-left:16px">⚡ Motion: {" • ".join(hints[:3])}</small>',
+                        unsafe_allow_html=True
+                    )
+
+    with tl_tab2:
+        if show_tl_table:
+            ev_df = pd.DataFrame([{
+                "Timestamp":     e["timestamp"],
+                "Action":        e["action"],
+                "Confidence (%)":e["confidence"],
+                "Segment":       e["segment"]+1,
+                "Start (s)":     e["start_s"],
+            } for e in event_list])
+            st.dataframe(ev_df, use_container_width=True, hide_index=True)
+
+        # Expandable analytics cards
+        st.markdown("#### 🔍 Expandable Event Cards")
+        for ev in event_list:
+            lbl = ev["action"]
+            with st.expander(f'{emo(lbl)} {ev["timestamp"]} — {lbl} ({ev["confidence"]}%)', expanded=False):
+                r_match = next((r for r in results if r["segment_id"]==ev["segment"]), None)
+                if r_match:
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.markdown(f"**Action:** {lbl}")
+                        st.markdown(f"**Timestamp:** {ev['timestamp']} → {ev['ts_end']}")
+                        st.markdown(f"**Confidence:** {ev['confidence']}%")
+                        st.progress(min(r_match["top_confidence"],1.0))
+                    with col2:
+                        expl = next((t["explanation"] for t in card.get("event_timeline",[]) if t["segment_id"]==ev["segment"]),"")
+                        st.markdown(f"**Tactical Note:** {expl}")
+                        if r_match.get("commentary"):
+                            st.markdown(f"**Commentary:** *{r_match['commentary']}*")
+                    if r_match.get("top_k_actions"):
+                        st.markdown("**Top Actions:**")
+                        for a in r_match["top_k_actions"][:4]:
+                            st.progress(min(a["confidence"],1.0), text=f'{a["label"]} — {a["confidence"]*100:.0f}%')
+
+    # ── Top-K per Segment ─────────────────────────────────────────────────────
+    st.markdown("### 🏆 Top Actions per Segment")
     for r in results:
         seg_lbl = f"Segment {r['segment_id']+1}  ({format_timestamp(r['start_time'])} – {format_timestamp(r['end_time'])})"
         with st.expander(f"🔍 {seg_lbl}  →  {r['top_action']}", expanded=False):
@@ -307,23 +402,19 @@ if "results" in st.session_state:
                     margin=dict(l=0,r=30,t=5,b=25),
                 )
                 st.plotly_chart(fig, use_container_width=True)
-
-            # Confidence progress bars
             st.markdown("**Confidence Breakdown:**")
             for a in top_k_data[:6]:
-                bar_col, val_col = st.columns([4,1])
-                with bar_col:
-                    st.progress(min(a["confidence"], 1.0), text=a["label"])
-                with val_col:
-                    st.markdown(f'<b style="color:{col(a["label"])}">{a["confidence"]*100:.0f}%</b>', unsafe_allow_html=True)
+                bc, vc = st.columns([4,1])
+                with bc: st.progress(min(a["confidence"],1.0), text=a["label"])
+                with vc: st.markdown(f'<b style="color:{col(a["label"])}">{a["confidence"]*100:.0f}%</b>', unsafe_allow_html=True)
 
-    # ── Charts ────────────────────────────────────────────────────────────────
+    # ── Analytics Charts ──────────────────────────────────────────────────────
     st.markdown("### 📈 Analytics Charts")
     ch1, ch2 = st.columns(2)
     df = pd.DataFrame([{
-        "Action": r["top_action"],
-        "Confidence": round(r["top_confidence"]*100,1),
-        "Time": format_timestamp(r["start_time"]),
+        "Action":     r["top_action"],
+        "Confidence": round(r["top_confidence"]*100, 1),
+        "Time":       format_timestamp(r["start_time"]),
     } for r in results])
 
     with ch1:
@@ -343,6 +434,16 @@ if "results" in st.session_state:
                               font=dict(color="#E5E7EB"), showlegend=False)
         st.plotly_chart(fig_bar, use_container_width=True)
 
+    # Confidence timeline line chart
+    if len(results) > 2:
+        fig_line = px.line(df, x="Time", y="Confidence", markers=True,
+                           title="Confidence Trend Over Time",
+                           labels={"Confidence":"Confidence (%)"})
+        fig_line.update_traces(line_color="#00C851", marker_color="#FFD700")
+        fig_line.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+                               font=dict(color="#E5E7EB"))
+        st.plotly_chart(fig_line, use_container_width=True)
+
     # ── Motion Heatmap ────────────────────────────────────────────────────────
     if show_heat and heatmaps:
         st.markdown("### 🗺️ Motion Activity Heatmap")
@@ -350,15 +451,12 @@ if "results" in st.session_state:
         if valid_hm:
             import matplotlib.pyplot as plt
             import seaborn as sns
-            
             combined = np.mean(valid_hm, axis=0) if len(valid_hm) > 1 else valid_hm[0]
-            
             fig, ax = plt.subplots(figsize=(10, 5))
             sns.heatmap(combined, cmap="hot", cbar=True, ax=ax, xticklabels=False, yticklabels=False)
             ax.set_title("Pitch Motion Intensity (Aggregated)", color="white")
             fig.patch.set_facecolor('#0E1117')
             ax.set_facecolor('#0E1117')
-            
             st.pyplot(fig)
         else:
             st.info("Motion heatmap requires at least 2 frames per segment.")
@@ -366,18 +464,20 @@ if "results" in st.session_state:
     # ── Detail Table ──────────────────────────────────────────────────────────
     if show_table:
         st.markdown("### 📋 Segment Detail Table")
+        from video_processing import format_timestamp as fmt_ts
         tdf = pd.DataFrame([{
             "Timestamp":       format_timestamp(r["start_time"]),
             "Start (s)":       r["start_time"],
             "End (s)":         r["end_time"],
             "Action Detected": r["top_action"],
-            "Confidence (%)":  round(r["top_confidence"]*100,1),
+            "Confidence (%)":  round(r["top_confidence"]*100, 1),
             "Commentary":      r.get("commentary",""),
         } for r in results])
         st.dataframe(tdf, use_container_width=True, hide_index=True)
 
     # ── Downloads ─────────────────────────────────────────────────────────────
     st.markdown("### 💾 Download Results")
+    from exporter import results_to_json, results_to_csv, build_timeline_text
     d1,d2,d3 = st.columns(3)
     json_str = results_to_json(results, summary, vinfo)
     csv_str  = results_to_csv(results)
@@ -387,4 +487,4 @@ if "results" in st.session_state:
     with d3: st.download_button("⬇️ Timeline",    tl_txt,   "event_timeline.txt",    "text/plain",        use_container_width=True)
 
 st.markdown("---")
-st.markdown('<p style="text-align:center;color:#374151;font-size:.8rem;">⚽ Football AI Analytics · X-CLIP + Optical Flow Intelligence · Built with Streamlit</p>', unsafe_allow_html=True)
+st.markdown('<p style="text-align:center;color:#374151;font-size:.8rem;">⚽ Football Intelligence Platform · X-CLIP + Optical Flow · YouTube Support · Python 3.11 · Built with Streamlit</p>', unsafe_allow_html=True)
