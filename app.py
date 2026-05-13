@@ -135,55 +135,70 @@ with inp_col2:
         "YouTube link", label_visibility="collapsed",
         placeholder="https://www.youtube.com/watch?v=...",
     )
-    yt_btn = st.button("⬇️ Download & Load YouTube Video", type="primary", use_container_width=True)
+    yt_btn = st.button("▶️ Load & Analyse YouTube Video", type="primary", use_container_width=True)
     if yt_btn and yt_url.strip():
-        from video_processing import download_youtube_video, VideoProcessingError
-        with st.spinner("⬇️ Downloading YouTube video…"):
+        from video_processing import get_youtube_stream_url, VideoProcessingError as VPE
+        with st.spinner("🔗 Extracting YouTube stream URL (no download needed)…"):
             try:
-                vpath = download_youtube_video(yt_url.strip())
-                source_label = f"🎬 YouTube: {yt_url[:55]}…"
-                st.success("✅ Downloaded successfully!")
-            except VideoProcessingError as e:
-                st.error(f"❌ Download failed: {e}")
+                stream_url, yt_title, yt_dur = get_youtube_stream_url(yt_url.strip())
+                st.session_state["yt_stream_url"] = stream_url
+                st.session_state["yt_title"]      = yt_title
+                st.session_state["yt_duration"]   = yt_dur
+                st.success(f"✅ Stream ready: **{yt_title}** ({yt_dur:.0f}s)")
+            except VPE as e:
+                st.error(f"❌ Stream failed: {e}")
             except Exception as e:
                 st.error(f"❌ Unexpected error: {e}")
 
 # ── Video Info + Analysis ─────────────────────────────────────────────────────
-if vpath and os.path.exists(vpath):
-    from video_processing import VideoProcessor, VideoProcessingError, format_timestamp
-    from football_intelligence import analyze_motion_signature, build_heatmap_data
+from video_processing import VideoProcessor, VideoProcessingError, format_timestamp, YouTubeStreamProcessor
+from football_intelligence import analyze_motion_signature, build_heatmap_data
 
+# Determine active source — local file or YouTube stream
+_yt_stream  = st.session_state.get("yt_stream_url")
+_yt_title   = st.session_state.get("yt_title", "YouTube Video")
+_yt_dur     = st.session_state.get("yt_duration", 0)
+_has_local  = vpath and os.path.exists(vpath)
+_has_stream = bool(_yt_stream)
+
+if _has_local or _has_stream:
     c1, c2 = st.columns([3,2])
     with c1:
         st.subheader("📽️ Video Preview")
-        if source_label.startswith("📂"):
+        if _has_local:
             st.video(vpath)
         else:
-            st.info("📽️ YouTube video downloaded — preview not shown. Click Analyse to process.")
+            st.info(f"🎬 **{_yt_title}**\n\nYouTube stream loaded — frames will be read directly for analysis.")
+
     with c2:
         st.subheader("📋 Video Info")
         try:
-            vp   = VideoProcessor(vpath)
-            vp.validate_duration()
-            info = vp.get_info()
-            v_dur = info["duration_sec"]
+            if _has_local:
+                vp    = VideoProcessor(vpath)
+                vp.validate_duration()
+                info  = vp.get_info()
+                v_dur = info["duration_sec"]
+                vp_analyse = vp
+            else:
+                vp    = YouTubeStreamProcessor(_yt_stream, _yt_title, _yt_dur)
+                info  = vp.get_info()
+                v_dur = _yt_dur if _yt_dur > 0 else info["duration_sec"]
+                vp_analyse = vp
 
-            if segment_sec > v_dur:
+            if segment_sec > v_dur and v_dur > 0:
                 st.warning(f"⚠️ Segment duration adjusted to {v_dur:.1f}s")
                 effective_seg = v_dur
             else:
                 effective_seg = segment_sec
 
             a,b = st.columns(2)
-            a.metric("⏱️ Duration", f"{v_dur}s")
+            a.metric("⏱️ Duration", f"{v_dur:.0f}s")
             b.metric("🎞️ FPS", info["fps"])
             a.metric("📐 Width", f"{info['width']}px")
             b.metric("📏 Height", f"{info['height']}px")
-
-            # Estimate segments
-            n_est = max(1, int(v_dur / effective_seg))
-            st.info(f"📦 Will analyse ~{n_est} segment(s) × {effective_seg:.0f}s each")
-            st.success("✅ Valid video — ready to analyse")
+            n_est = max(1, int(v_dur / effective_seg)) if v_dur > 0 else "?"
+            st.info(f"📦 ~{n_est} segment(s) × {effective_seg:.0f}s each")
+            st.success("✅ Ready to analyse")
             run = st.button("🚀 Analyse Football Actions", type="primary", use_container_width=True)
         except VideoProcessingError as e:
             st.error(f"❌ {e}"); run = False
@@ -197,9 +212,10 @@ if vpath and os.path.exists(vpath):
             predictor.top_k = top_k
 
             st.write(f"🎞️ Extracting segments ({effective_seg:.0f}s each)…")
-            vp2      = VideoProcessor(vpath)
+            vp2      = vp_analyse
             segments = vp2.extract_segments(segment_duration=effective_seg)
             st.write(f"  → {len(segments)} segment(s) extracted")
+
 
             st.write("🧠 Classifying actions with X-CLIP + motion intelligence…")
             prog = st.progress(0)

@@ -267,89 +267,105 @@ class VideoProcessor:
         cap.release()
 
 
-# ─── YouTube Downloader ───────────────────────────────────────────────────────
-def download_youtube_video(url: str, output_dir: Optional[str] = None) -> str:
+# ─── YouTube Stream Processor ────────────────────────────────────────────────
+def get_youtube_stream_url(url: str) -> tuple:
     """
-    Download a YouTube video (standard, Shorts, or MP4 link) using yt-dlp.
-
-    Parameters
-    ----------
-    url        : YouTube URL (standard, Shorts, or MP4)
-    output_dir : directory to save the file (defaults to system temp dir)
-
-    Returns
-    -------
-    str : absolute path to the downloaded MP4 file.
-
-    Raises
-    ------
-    VideoProcessingError : if download fails or yt-dlp is not installed.
+    Get direct stream URL from YouTube WITHOUT downloading.
+    Returns (stream_url, title, duration_seconds).
+    OpenCV can read frames directly from this URL.
     """
     try:
-        import yt_dlp  # noqa: F401
+        import yt_dlp
     except ImportError:
-        raise VideoProcessingError(
-            "yt-dlp is not installed. Run: pip install yt-dlp"
-        )
-
-    if output_dir is None:
-        output_dir = tempfile.gettempdir()
-
-    out_template = os.path.join(output_dir, "yt_%(id)s.%(ext)s")
+        raise VideoProcessingError("yt-dlp not installed. Run: pip install yt-dlp")
 
     ydl_opts = {
-        # Format fallback chain: prefer mp4, accept anything available
-        "format":      "best[ext=mp4]/best",
-        "outtmpl":     out_template,
+        "format":      "best[ext=mp4]/best[height<=720]/best",
         "quiet":       True,
         "no_warnings": True,
-        # ── Anti-403 / Bot-detection bypass ──────────────────────────────────
-        "retries":     3,
-        "socket_timeout": 30,
+        "skip_download": True,   # ← KEY: don't download, just get URL
+        "extractor_args": {
+            "youtube": {"player_client": ["ios", "web"]}
+        },
         "http_headers": {
             "User-Agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
                 "Chrome/124.0.0.0 Safari/537.36"
             ),
-            "Accept-Language": "en-US,en;q=0.9",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Referer": "https://www.youtube.com/",
-        },
-        # Use iOS client — much less restricted than web client
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["ios", "web"],
-            }
         },
     }
 
     try:
-        import yt_dlp
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            video_id = info.get("id", "video")
-            ext = info.get("ext", "mp4")
-            # Primary guess
-            downloaded = os.path.join(output_dir, f"yt_{video_id}.{ext}")
-            if not os.path.exists(downloaded):
-                # Scan output_dir for any file matching the video_id prefix
-                video_exts = {".mp4", ".webm", ".mkv", ".mov", ".avi"}
-                for f in os.listdir(output_dir):
-                    fpath = os.path.join(output_dir, f)
-                    if f.startswith(f"yt_{video_id}") and os.path.splitext(f)[1].lower() in video_exts:
-                        downloaded = fpath
-                        break
-            if not os.path.exists(downloaded):
-                raise VideoProcessingError(
-                    f"Download appeared to succeed but video file not found for id: {video_id}"
-                )
-            logger.info("YouTube video downloaded: %s", downloaded)
-            return downloaded
+            info = ydl.extract_info(url, download=False)
+            # Get the best format's direct URL
+            stream_url = info.get("url")
+            if not stream_url:
+                # Try from formats list
+                fmts = info.get("formats", [])
+                # Prefer mp4, fallback to any
+                for f in reversed(fmts):
+                    if f.get("url") and f.get("vcodec", "none") != "none":
+                        stream_url = f["url"]
+                        if f.get("ext") == "mp4":
+                            break
+            if not stream_url:
+                raise VideoProcessingError("Could not extract stream URL from YouTube.")
+            title    = info.get("title", "YouTube Video")
+            duration = info.get("duration", 0)
+            logger.info("Stream URL obtained for: %s (%.0fs)", title, duration)
+            return stream_url, title, duration
     except yt_dlp.utils.DownloadError as exc:
-        raise VideoProcessingError(f"YouTube download failed: {exc}") from exc
+        raise VideoProcessingError(f"YouTube stream failed: {exc}") from exc
+    except VideoProcessingError:
+        raise
     except Exception as exc:
-        raise VideoProcessingError(f"Unexpected error during download: {exc}") from exc
+        raise VideoProcessingError(f"Unexpected stream error: {exc}") from exc
+
+
+class YouTubeStreamProcessor(VideoProcessor):
+    """
+    VideoProcessor that reads frames directly from a YouTube stream URL.
+    No file download — OpenCV reads directly from the CDN URL.
+    """
+
+    def __init__(self, stream_url: str, title: str = "YouTube Video", duration: float = 0):
+        # Skip parent __init__ validation (no local file)
+        self.video_path  = stream_url
+        self.title       = title
+        self._stream_url = stream_url
+        self._cap: Optional[cv2.VideoCapture] = None
+        self._fps: float = 25.0
+        self._total_frames: int = 0
+        self._width:  int = 1280
+        self._height: int = 720
+        self._duration: float = duration
+        self._load_stream_metadata()
+
+    def _load_stream_metadata(self) -> None:
+        cap = cv2.VideoCapture(self._stream_url)
+        if cap.isOpened():
+            self._fps    = cap.get(cv2.CAP_PROP_FPS) or 25.0
+            self._width  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))  or 1280
+            self._height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) or 720
+            fc = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+            if fc and fc > 0:
+                self._total_frames = int(fc)
+                self._duration     = self._total_frames / self._fps
+            cap.release()
+        logger.info("Stream metadata: %.1fs | %.0f fps | %dx%d",
+                    self._duration, self._fps, self._width, self._height)
+
+
+# ─── Legacy download function (kept for compatibility) ────────────────────────
+def download_youtube_video(url: str, output_dir: Optional[str] = None) -> str:
+    """Kept for backwards compatibility. Prefer get_youtube_stream_url() instead."""
+    raise VideoProcessingError(
+        "Direct download disabled. Use get_youtube_stream_url() for streaming."
+    )
+
 
 
 def is_youtube_url(url: str) -> bool:
@@ -360,6 +376,8 @@ def is_youtube_url(url: str) -> bool:
         r"(https?://)?(www\.)?youtube\.com/shorts/",
     ]
     return any(re.search(p, url) for p in patterns)
+
+
 
 
 # ─── Utility functions ────────────────────────────────────────────────────────
