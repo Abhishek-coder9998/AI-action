@@ -226,32 +226,34 @@ class FootballActionPredictor:
         """
         sampled = self._sample_frames(frames, n=8)
 
-        # ── Text encoding ─────────────────────────────────────────────────────
-        text_inputs = self.processor(
+        # 1. Text processing (processor is reliable for text)
+        text_enc = self.processor(
             text=self._prompts,
-            return_tensors="pt",
             padding=True,
-        )
+            return_tensors="pt"
+        ).to(self.device)
 
-        # ── Build pixel_values manually: (1, T, 3, 224, 224) float32 ─────────
-        pixel_values = self._frames_to_tensor(sampled).float().to(self.device)
+        # 2. Video processing (manual to avoid processor bugs)
+        pixel_values = self._frames_to_tensor(sampled).to(self.device)
 
-        # ── Only pass exact keys XCLIPModel.forward() needs ───────────────────
-        model_inputs = {
-            "input_ids":      text_inputs["input_ids"].to(self.device),
-            "attention_mask": text_inputs["attention_mask"].to(self.device),
-            "pixel_values":   pixel_values,
-        }
+        # Log for debugging (visible in Streamlit logs)
+        logger.info(f"Predicting: text_ids={text_enc.input_ids.shape}, pixel_values={pixel_values.shape}")
 
         with self.torch.no_grad():
-            outputs = self.model(**model_inputs)
-
+            # Call model with explicit keyword arguments to avoid NoneType issues
+            outputs = self.model(
+                input_ids=text_enc.input_ids,
+                attention_mask=text_enc.attention_mask,
+                pixel_values=pixel_values,
+                return_dict=True
+            )
 
         logits    = outputs.logits_per_video         # [1, num_labels]
         raw_probs = logits.softmax(dim=1).cpu().numpy()[0]
 
         # Normalize confidence to realistic range
         norm_probs = self._normalizer.normalize(raw_probs, top_k=self.top_k)
+
 
         # Build results dict
         all_scores = {
