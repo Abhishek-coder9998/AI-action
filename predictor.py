@@ -10,10 +10,8 @@ Key improvements:
 - Top-K scoring with relative ranking preserved
 """
 
-import torch
 import numpy as np
 from PIL import Image
-from transformers import XCLIPProcessor, XCLIPModel
 import logging
 from typing import List, Dict, Optional
 
@@ -157,7 +155,10 @@ class FootballActionPredictor:
         sport_mode: str = "football",
         top_k: int = 6,
     ):
-        self.device     = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        import torch
+
+        self.torch      = torch
+        self.device     = device or ("cuda" if self.torch.cuda.is_available() else "cpu")
         self.sport_mode = sport_mode
         self.top_k      = top_k
         self._normalizer = ConfidenceNormalizer()
@@ -165,6 +166,8 @@ class FootballActionPredictor:
         self._build_label_bank()
 
     def _load_model(self) -> None:
+        from transformers import XCLIPProcessor, XCLIPModel
+
         logger.info("Loading %s on %s …", self.MODEL_NAME, self.device)
         self.processor = XCLIPProcessor.from_pretrained(self.MODEL_NAME)
         self.model     = XCLIPModel.from_pretrained(self.MODEL_NAME).to(self.device)
@@ -210,7 +213,7 @@ class FootballActionPredictor:
         )
         inputs = {k: v.to(self.device) for k, v in inputs.items()}
 
-        with torch.no_grad():
+        with self.torch.no_grad():
             outputs = self.model(**inputs)
 
         logits    = outputs.logits_per_video         # [1, num_labels]
