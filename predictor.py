@@ -226,21 +226,26 @@ class FootballActionPredictor:
         """
         sampled = self._sample_frames(frames, n=8)
 
-        # ── Text encoding via processor ───────────────────────────────────────
+        # ── Text encoding ─────────────────────────────────────────────────────
         text_inputs = self.processor(
             text=self._prompts,
             return_tensors="pt",
             padding=True,
         )
-        text_inputs = {k: v.to(self.device) for k, v in text_inputs.items()}
 
-        # ── Video encoding — manually built tensor ────────────────────────────
-        pixel_values = self._frames_to_tensor(sampled).to(self.device)
-        # X-CLIP forward: pixel_values shape must be (B, T, C, H, W)
-        inputs = {**text_inputs, "pixel_values": pixel_values}
+        # ── Build pixel_values manually: (1, T, 3, 224, 224) float32 ─────────
+        pixel_values = self._frames_to_tensor(sampled).float().to(self.device)
+
+        # ── Only pass exact keys XCLIPModel.forward() needs ───────────────────
+        model_inputs = {
+            "input_ids":      text_inputs["input_ids"].to(self.device),
+            "attention_mask": text_inputs["attention_mask"].to(self.device),
+            "pixel_values":   pixel_values,
+        }
 
         with self.torch.no_grad():
-            outputs = self.model(**inputs)
+            outputs = self.model(**model_inputs)
+
 
         logits    = outputs.logits_per_video         # [1, num_labels]
         raw_probs = logits.softmax(dim=1).cpu().numpy()[0]
