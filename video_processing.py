@@ -303,6 +303,25 @@ def download_youtube_video(url: str, output_dir: Optional[str] = None) -> str:
         "outtmpl":     out_template,
         "quiet":       True,
         "no_warnings": True,
+        # ── Anti-403 / Bot-detection bypass ──────────────────────────────────
+        "retries":     3,
+        "socket_timeout": 30,
+        "http_headers": {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36"
+            ),
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Referer": "https://www.youtube.com/",
+        },
+        # Use iOS client — much less restricted than web client
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["ios", "web"],
+            }
+        },
     }
 
     try:
