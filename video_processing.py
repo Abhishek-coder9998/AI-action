@@ -298,11 +298,11 @@ def download_youtube_video(url: str, output_dir: Optional[str] = None) -> str:
     out_template = os.path.join(output_dir, "yt_%(id)s.%(ext)s")
 
     ydl_opts = {
-        "format":       "bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]/best[ext=mp4]/best",
-        "outtmpl":      out_template,
-        "quiet":        True,
-        "no_warnings":  True,
-        "merge_output_format": "mp4",
+        # Single pre-merged format — no ffmpeg needed
+        "format":      "best[ext=mp4][height<=720]/best[ext=mp4]/best[height<=720]/best",
+        "outtmpl":     out_template,
+        "quiet":       True,
+        "no_warnings": True,
     }
 
     try:
@@ -310,17 +310,20 @@ def download_youtube_video(url: str, output_dir: Optional[str] = None) -> str:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             video_id = info.get("id", "video")
-            # Find the downloaded file
-            downloaded = os.path.join(output_dir, f"yt_{video_id}.mp4")
+            ext = info.get("ext", "mp4")
+            # Primary guess
+            downloaded = os.path.join(output_dir, f"yt_{video_id}.{ext}")
             if not os.path.exists(downloaded):
-                # Fallback: search for any matching file
+                # Scan output_dir for any file matching the video_id prefix
+                video_exts = {".mp4", ".webm", ".mkv", ".mov", ".avi"}
                 for f in os.listdir(output_dir):
-                    if f.startswith(f"yt_{video_id}") and f.endswith(".mp4"):
-                        downloaded = os.path.join(output_dir, f)
+                    fpath = os.path.join(output_dir, f)
+                    if f.startswith(f"yt_{video_id}") and os.path.splitext(f)[1].lower() in video_exts:
+                        downloaded = fpath
                         break
             if not os.path.exists(downloaded):
                 raise VideoProcessingError(
-                    f"Download appeared to succeed but file not found: {downloaded}"
+                    f"Download appeared to succeed but video file not found for id: {video_id}"
                 )
             logger.info("YouTube video downloaded: %s", downloaded)
             return downloaded
