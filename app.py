@@ -347,29 +347,40 @@ if "results" in st.session_state:
     for ev in event_list:
         lbl = ev["action"]
         c_  = col(lbl)
-        tl  = card.get("event_timeline", [])
-        expl = next((t["explanation"] for t in tl if t["segment_id"]==ev["segment"]), "")
         r_match = next((r for r in results if r["segment_id"]==ev["segment"]), None)
         
-        # Segment Card
+        # Action Card with Timestamp
         st.markdown(
-            f'<div class="ev-card" style="border-left-color:{c_}; margin-bottom: 20px; padding: 18px; background: #111827; border-radius: 12px; border-left: 6px solid {c_};">'
-            f'<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom: 8px;">'
-            f'<div>'
-            f'<div style="color:#9CA3AF; font-size:0.8rem; font-weight:600; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Segment {ev["segment"]+1} • {ev["timestamp"]} – {ev["ts_end"]}</div>'
-            f'<div style="font-size:1.4rem; font-weight:800; color:#F9FAFB;">{emo(lbl)} {lbl}</div>'
-            f'</div>'
-            f'<div style="background:rgba(96, 165, 250, 0.1); color:#60A5FA; padding:6px 12px; border-radius:8px; font-weight:800; font-size:1.1rem; border:1px solid rgba(96, 165, 250, 0.2);">'
-            f'⏱ {ev["timestamp"]}'
-            f'</div>'
-            f'</div>'
-            f'<div style="margin-top:12px; margin-bottom:12px;">'
-            f'<span class="badge" style="background:{c_}22; color:{c_}; border:1px solid {c_}44; font-size:0.8rem; padding:4px 12px;">{lbl}</span>'
-            f'</div>'
-            + (f'<div class="comm" style="margin-top:10px; margin-bottom:10px; font-size:0.95rem; line-height:1.5;">🎙️ <b>Commentary:</b> {r_match["commentary"]}</div>' if r_match and r_match.get("commentary") else "")
-            + (f'<div style="color:#6B7280; font-size:0.85rem; margin-top:8px; display:flex; align-items:center;"><span style="margin-right:8px;">🏃</span> Motion: {" • ".join(r_match.get("motion_signature",{}).get("football_hints",[]))}</div>' if r_match and r_match.get("motion_signature",{}).get("football_hints",[]) else "")
-            + f'</div>',
-            unsafe_allow_html=True,
+            f'''
+            <div style="background: #111827; border-radius: 12px; border-left: 8px solid {c_}; padding: 20px; margin-bottom: 20px; border: 1px solid #374151; border-left: 8px solid {c_};">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="font-size: 1.5rem; font-weight: 800; color: #F9FAFB;">
+                        {emo(lbl)} {lbl}
+                    </div>
+                    <div style="background: #1E293B; color: #34D399; padding: 8px 16px; border-radius: 8px; font-weight: 900; font-size: 1.2rem; border: 1px solid #34D399;">
+                        ⏱ {ev["timestamp"]}
+                    </div>
+                </div>
+                <div style="color: #9CA3AF; font-size: 0.9rem; margin-top: 8px; font-weight: 600;">
+                    VIDEO RANGE: {ev["timestamp"]} — {ev["ts_end"]}
+                </div>
+                <div style="margin-top: 15px;">
+                    <span style="background: {c_}33; color: {c_}; padding: 4px 12px; border-radius: 6px; font-size: 0.8rem; font-weight: 700; border: 1px solid {c_}66;">
+                        {lbl.upper()}
+                    </span>
+                </div>
+                ''' + (f'''
+                <div style="background: #0F172A; border-left: 4px solid #FFD700; padding: 12px; margin-top: 15px; color: #E5E7EB; font-style: italic; font-size: 1rem;">
+                    🎙️ <b>Commentary:</b> {r_match["commentary"]}
+                </div>
+                ''' if r_match and r_match.get("commentary") else "") + (f'''
+                <div style="color: #6B7280; font-size: 0.85rem; margin-top: 12px;">
+                    ⚡ <b>Motion Detected:</b> {" • ".join(r_match.get("motion_signature",{}).get("football_hints",[]))}
+                </div>
+                ''' if r_match and r_match.get("motion_signature",{}).get("football_hints",[]) else "") + '''
+            </div>
+            ''',
+            unsafe_allow_html=True
         )
 
     # ── Analytics Charts (Heatmap Only) ──────────────────────────────────────
