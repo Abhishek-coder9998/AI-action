@@ -204,23 +204,21 @@ if analyze_btn or "results" in st.session_state:
         active_meta = get_action_meta(active_r["top_action"])
 
         with p_col1:
-            # Player Box
-            st.markdown(f"<div style='height:240px; background:#000; border-radius:8px; overflow:hidden; border:1px solid #1E293B;'>", unsafe_allow_html=True)
+            # Clean Player (No manual div wrapper to avoid black boxes)
             if is_youtube_url(st.session_state.video_source):
                 yt_id = st.session_state.video_source.split("v=")[-1]
-                st.markdown(f'<iframe width="100%" height="240" src="https://www.youtube.com/embed/{yt_id}?start={int(st.session_state["seek_time"])}&autoplay=1" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>', unsafe_allow_html=True)
+                st.markdown(f'<iframe width="100%" height="200" src="https://www.youtube.com/embed/{yt_id}?start={int(st.session_state["seek_time"])}&autoplay=1" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen style="border-radius:8px;"></iframe>', unsafe_allow_html=True)
             elif st.session_state.video_source == "demo":
-                st.markdown("<div style='display:flex; align-items:center; justify-content:center; height:240px; color:#64748B;'>Demo Video Placeholder</div>", unsafe_allow_html=True)
+                st.markdown("<div style='height:180px; background:#1E293B; border-radius:8px; display:flex; align-items:center; justify-content:center; color:#64748B; border:1px dashed #334155;'>Demo Mode: No Video Preview</div>", unsafe_allow_html=True)
             else:
                 st.video(st.session_state.video_source, start_time=int(st.session_state["seek_time"]))
-            st.markdown("</div>", unsafe_allow_html=True)
             
-            # Status line
+            # Compact Status line
             st.markdown(f"""
-            <div style='margin-top:8px; font-weight:800; font-size:0.9rem;'>
+            <div style='margin-top:5px; font-weight:800; font-size:0.8rem; background:rgba(255,255,255,0.03); padding:5px 10px; border-radius:4px;'>
                 <span style='color:#10B981;'>▶ {format_timestamp(st.session_state["seek_time"])}</span> 
-                <span style='color:#334155; margin:0 10px;'>|</span>
-                <span style='color:{active_meta['color']};'>⚡ CURRENT ACTION: {active_r['top_action'].upper()}</span>
+                <span style='color:#334155; margin:0 8px;'>|</span>
+                <span style='color:{active_meta['color']};'>⚡ {active_r['top_action'].upper()}</span>
             </div>
             """, unsafe_allow_html=True)
 
