@@ -141,29 +141,36 @@ with input_col:
 with info_col:
     st.info("**Analysis Specs:**\n- ResNet50 Spatial Analysis\n- X-CLIP Temporal Processing\n- Farneback Optical Flow\n- Minimum 7 Action Enforcement")
 
-# ─── Processing ───────────────────────────────────────────────────────────
+# ─── Analysis Logic ──────────────────────────────────────────────────────────
+if "seek_time" not in st.session_state:
+    st.session_state["seek_time"] = 0.0
+
 if analyze_btn or "results" in st.session_state:
     if analyze_btn:
         with st.status("🧠 Running Ensemble Pipeline...", expanded=True) as status:
             if demo_mode:
                 time.sleep(1)
                 st.write("Constructing realistic demo segments...")
-                # Fake segments for demo showing 7 actions
                 demo_actions = ["side kick", "through ball pass", "sliding tackle", "foul committed", "goalkeeper save", "counter attack run", "shot on goal"]
                 results = []
                 for i, act in enumerate(demo_actions):
                     results.append({
-                        "segment_id": i, "start_time": i*5, "end_time": (i+1)*5,
+                        "segment_id": i, "start_time": float(i*5), "end_time": float((i+1)*5),
                         "top_action": act, "intensity": 0.85, "duration": 5.0,
                         "motion_data": {"magnitude": 65, "direction": "forward"}
                     })
                 st.session_state.results = results
                 st.session_state.duration = 35.0
+                st.session_state.video_source = "demo"
             else:
                 if uploaded_file:
                     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
                         tmp.write(uploaded_file.read()); video_path = tmp.name
                     vp = VideoProcessor(video_path)
+                    st.session_state.video_source = video_path
+                elif video_input:
+                    vp = VideoProcessor(video_input)
+                    st.session_state.video_source = video_input
                 else: st.error("Upload a video"); st.stop()
                 
                 st.write("Extracting frames & calculating optical flow...")
@@ -179,10 +186,69 @@ if analyze_btn or "results" in st.session_state:
             
             status.update(label="Analysis Complete ✅", state="complete")
 
-    # ─── UI Rendering ────────────────────────────────────────────────────────
+    # ─── COMPACT VIDEO PLAYER SECTION ──────────────────────────────────────────
     res = st.session_state.results
     
+    st.markdown("### 📽️ Synchronized Playback")
+    
+    if "video_source" in st.session_state:
+        p_col1, p_col2 = st.columns([0.55, 0.45])
+        
+        # Determine active action based on seek_time
+        active_r = res[0]
+        for r in res:
+            if r["start_time"] <= st.session_state["seek_time"] < r["end_time"]:
+                active_r = r
+                break
+        active_meta = get_action_meta(active_r["top_action"])
+
+        with p_col1:
+            # Player Box
+            st.markdown(f"<div style='height:240px; background:#000; border-radius:8px; overflow:hidden; border:1px solid #1E293B;'>", unsafe_allow_html=True)
+            if is_youtube_url(st.session_state.video_source):
+                yt_id = st.session_state.video_source.split("v=")[-1]
+                st.markdown(f'<iframe width="100%" height="240" src="https://www.youtube.com/embed/{yt_id}?start={int(st.session_state["seek_time"])}&autoplay=1" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>', unsafe_allow_html=True)
+            elif st.session_state.video_source == "demo":
+                st.markdown("<div style='display:flex; align-items:center; justify-content:center; height:240px; color:#64748B;'>Demo Video Placeholder</div>", unsafe_allow_html=True)
+            else:
+                st.video(st.session_state.video_source, start_time=int(st.session_state["seek_time"]))
+            st.markdown("</div>", unsafe_allow_html=True)
+            
+            # Status line
+            st.markdown(f"""
+            <div style='margin-top:8px; font-weight:800; font-size:0.9rem;'>
+                <span style='color:#10B981;'>▶ {format_timestamp(st.session_state["seek_time"])}</span> 
+                <span style='color:#334155; margin:0 10px;'>|</span>
+                <span style='color:{active_meta['color']};'>⚡ CURRENT ACTION: {active_r['top_action'].upper()}</span>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with p_col2:
+            st.markdown("<h4 style='margin:0; font-size:1rem;'>⚡ Jump to Action</h4>", unsafe_allow_html=True)
+            st.markdown("<div style='height:210px; overflow-y:auto; padding-right:10px;'>", unsafe_allow_html=True)
+            for r in res:
+                is_active = (r == active_r)
+                btn_label = f"▶ {format_timestamp(r['start_time'])}  {r['top_action'].upper()}"
+                if st.button(btn_label, key=f"jump_{r['segment_id']}", use_container_width=True):
+                    st.session_state["seek_time"] = r["start_time"]
+                    st.rerun()
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        # Quick Pills Row
+        st.markdown("<div style='margin-top:15px;'></div>", unsafe_allow_html=True)
+        pill_cols = st.columns(len(res) if len(res) < 10 else 10)
+        for idx, r in enumerate(res[:10]):
+            meta = get_action_meta(r["top_action"])
+            with pill_cols[idx]:
+                if st.button(f"{meta['icon']} {format_timestamp(r['start_time'])}", key=f"pill_{r['segment_id']}", help=r["top_action"]):
+                    st.session_state["seek_time"] = r["start_time"]
+                    st.rerun()
+    else:
+        st.markdown("<p style='color:#64748B;'>📤 Upload a video above to enable playback</p>", unsafe_allow_html=True)
+
+    # ─── Dashboard Rendering ──────────────────────────────────────────────────
     # 1. Action Grid (4 per row)
+    st.markdown("---")
     st.markdown("### 🕐 Action Event Grid")
     for i in range(0, len(res), 4):
         cols = st.columns(4)
@@ -202,6 +268,9 @@ if analyze_btn or "results" in st.session_state:
                     <div class="seg-dur">⏳ DURATION: {r['duration']:.0f}s | ⚡ {r['motion_data'].get('direction', 'N/A')}</div>
                 </div>
                 """, unsafe_allow_html=True)
+                if st.button(f"▶ {format_timestamp(r['start_time'])}", key=f"card_seek_{r['segment_id']}", use_container_width=True):
+                    st.session_state["seek_time"] = r["start_time"]
+                    st.rerun()
 
     # 2. Tactical Heatmap
     st.markdown("---")
@@ -229,16 +298,28 @@ if analyze_btn or "results" in st.session_state:
     st.markdown("<p style='text-align:center; color:#64748B; font-size:0.8rem;'>Low Activity ←[ Viridis Gradient ]→ High Activity</p>", unsafe_allow_html=True)
 
     # 3. Event Table
-    st.markdown("---")
     st.markdown("### 📋 Event Timeline")
-    df_table = pd.DataFrame([{
-        "#": r["segment_id"]+1,
-        "Timestamp": f"{format_timestamp(r['start_time'])} - {format_timestamp(r['end_time'])}",
-        "Action": r["top_action"].upper(),
-        "Duration": f"{r['duration']:.0f}s",
-        "Description": generate_smart_commentary(r["top_action"])
-    } for r in res])
-    st.table(df_table)
+    
+    # Header Row
+    h_col1, h_col2, h_col3, h_col4, h_col5, h_col6 = st.columns([0.1, 0.2, 0.2, 0.1, 0.3, 0.1])
+    h_col1.markdown("**#**")
+    h_col2.markdown("**Timestamp**")
+    h_col3.markdown("**Action**")
+    h_col4.markdown("**Dur**")
+    h_col5.markdown("**Description**")
+    h_col6.markdown("**▶**")
+    
+    for r in res:
+        meta = get_action_meta(r["top_action"])
+        c1, c2, c3, c4, c5, c6 = st.columns([0.1, 0.2, 0.2, 0.1, 0.3, 0.1])
+        c1.write(r["segment_id"]+1)
+        c2.write(f"{format_timestamp(r['start_time'])} - {format_timestamp(r['end_time'])}")
+        c3.markdown(f"<span style='color:{meta['color']}; font-weight:700;'>{r['top_action'].upper()}</span>", unsafe_allow_html=True)
+        c4.write(f"{r['duration']:.0f}s")
+        c5.write(generate_smart_commentary(r["top_action"]))
+        if c6.button("▶", key=f"tbl_seek_{r['segment_id']}"):
+            st.session_state["seek_time"] = r["start_time"]
+            st.rerun()
 
     # 4. Status Bar
     st.success(f"✅ CNN + X-CLIP Analysis Complete — {len(res)} segments | {len(set([x['top_action'] for x in res]))} unique actions | Duration: {st.session_state.duration:.1f}s")
