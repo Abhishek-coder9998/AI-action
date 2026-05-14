@@ -393,18 +393,14 @@ SEGMENT {ev["segment"]+1} • {ev["timestamp"]} → {ev["ts_end"]}
 <div style="background: #0F172A; border-radius: 8px; padding: 14px; margin-top: 10px; border: 1px solid #1E293B; color: #E5E7EB; line-height: 1.5;">
 <span style="color: #FFD700; margin-right: 6px; font-size: 1.1rem;">🎙️</span> <b>Commentary:</b> {r_match["commentary"]}
 </div>
-''' if r_match and r_match.get("commentary") else "") + f'''
-<div style="margin-top: 15px; display: flex; flex-wrap: wrap; gap: 8px;">
-{"".join([f'<span style="background: #1E293B; color: #6B7280; padding: 3px 10px; border-radius: 12px; font-size: 0.75rem; border: 1px solid #374151;">⚡ {h}</span>' for h in (r_match.get("motion_signature",{}).get("football_hints",[]) if r_match else [])])}
+''' if r_match and r_match.get("commentary") else "") + f'''</div>
 </div>
-</div>
+''', unsafe_allow_html=True)
 
-<!-- Segment Action Intensity Bar Chart -->
+        # Segment Action Intensity Bar Chart Wrapper
+        st.markdown('''
 <div style="margin-bottom: 40px; padding: 10px; background: rgba(31, 41, 55, 0.3); border-radius: 0 0 12px 12px; border: 1px solid #374151; border-top: none;">
-'''
-        st.markdown(unsafe_allow_html=True)
-        
-        # Prepare data for 5+ bars
+''', unsafe_allow_html=True)
         preds = r_match["top_k_actions"] if r_match else []
         if len(preds) < 5:
             # Pad with other common actions if needed
