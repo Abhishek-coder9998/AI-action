@@ -354,14 +354,14 @@ if "results" in st.session_state:
     # ── Action Segment Section ───────────────────────────────────────────────
     st.markdown("### 🕐 Action Segments")
     
-    for ev_idx, r in enumerate(results):
+    for r in results:
         lbl = r["top_action"]
         c_  = col(lbl)
         dur = r["end_time"] - r["start_time"]
         t_start = format_timestamp(r["start_time"])
         t_end   = format_timestamp(r["end_time"])
         
-        # Enhanced Segment Card - EXACT HTML ALIGNMENT
+        # Action Segment Card - EXACT HTML
         st.markdown(f'''
 <div style="background: #111827; border-radius: 12px; border-left: 10px solid {c_}; padding: 25px; margin-bottom: 0px; border: 1px solid #374151; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);">
     <!-- Top Row: Header + Timestamp -->
@@ -413,7 +413,7 @@ if "results" in st.session_state:
 <div style="margin-bottom: 60px; padding: 20px; background: rgba(17, 24, 39, 0.6); border-radius: 0 0 12px 12px; border: 1px solid #374151; border-top: none;">
 ''', unsafe_allow_html=True)
         
-        # Prepare bar chart data
+        # Data for 5+ bars
         raw_scores = r.get("scored_actions", [])
         if not raw_scores:
             preds = r.get("top_k_actions", [])
@@ -435,13 +435,12 @@ if "results" in st.session_state:
         fig_seg = px.bar(
             chart_data, x="Intensity", y="Action", orientation='h',
             color="Action", color_discrete_map=COLORS,
-            title=f"📊 Intensity Analysis: {t_start} – {t_end}"
+            template="plotly_dark"
         )
         fig_seg.update_layout(
-            showlegend=False, height=280, margin=dict(l=20, r=20, t=50, b=20),
+            showlegend=False, height=260, margin=dict(l=20, r=20, t=20, b=20),
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="#9CA3AF", size=10),
-            xaxis=dict(title=None, showticklabels=False, showgrid=False),
+            xaxis=dict(title=None, showticklabels=False, showgrid=False, zeroline=False),
             yaxis=dict(title=None, showgrid=False)
         )
         st.plotly_chart(fig_seg, use_container_width=True, config={'displayModeBar': False})
