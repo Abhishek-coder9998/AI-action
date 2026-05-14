@@ -94,15 +94,35 @@ class FootballActionPredictor:
             return [{"label": "Ball in Play", "intensity": 0.5}]
 
         # A. X-CLIP Temporal Prediction (60%)
-        inputs = self.processor(
+        # Manual tensor construction to avoid shape mismatches in transformers
+        mean = np.array([0.48145466, 0.4578275, 0.40821073])
+        std = np.array([0.26862954, 0.26130258, 0.27577711])
+        
+        processed_frames = []
+        for img in frames_list:
+            img_resized = img.convert("RGB").resize((224, 224), Image.LANCZOS)
+            arr = np.array(img_resized).astype(np.float32) / 255.0
+            arr = (arr - mean) / std
+            arr = arr.transpose(2, 0, 1) # CHW
+            processed_frames.append(arr)
+        
+        # Shape: (1, num_frames, 3, 224, 224)
+        pixel_values = torch.tensor(np.stack(processed_frames, axis=0)).unsqueeze(0).to(self.device)
+        
+        # Text encoding
+        text_inputs = self.processor(
             text=self.labels,
-            videos=[frames_list], # Batch of 8
             return_tensors="pt",
             padding=True
         ).to(self.device)
-        
+
         with torch.no_grad():
-            outputs = self.xclip(**inputs)
+            outputs = self.xclip(
+                input_ids=text_inputs.input_ids,
+                attention_mask=text_inputs.attention_mask,
+                pixel_values=pixel_values,
+                return_dict=True
+            )
             xclip_probs = outputs.logits_per_video.softmax(dim=-1).cpu().numpy()[0]
 
         # B. CNN Spatial Prediction (40%)
