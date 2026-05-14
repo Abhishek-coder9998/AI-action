@@ -80,11 +80,10 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("""
 **Pipeline**  
-`Input` → `Frame Extract` → `X-CLIP` → `Confidence Normalize` → `Motion Analysis` → `Commentary`
+`Input` → `Frame Extract` → `X-CLIP` → `Motion Analysis` → `Commentary`
 
 **Model**: Microsoft X-CLIP (HuggingFace)  
 **Actions**: 30+ football labels  
-**Confidence**: Normalized 25–93%  
 **New**: YouTube • Long Video • Timestamps
 """)
 
@@ -276,7 +275,6 @@ if "results" in st.session_state:
     results  = st.session_state["results"]
     summary  = st.session_state["summary"]
     card     = st.session_state["card"]
-    heatmaps = st.session_state.get("heatmaps", [])
     vinfo    = st.session_state.get("vid_info", {})
 
     import plotly.graph_objects as go
@@ -289,13 +287,12 @@ if "results" in st.session_state:
     m1,m2,m3,m4,m5 = st.columns(5)
     acts   = [r["top_action"] for r in results]
     uniq   = list(dict.fromkeys(acts))
-    avg_c  = sum(r["top_confidence"] for r in results)/len(results) if results else 0
     top_act = max(set(acts), key=acts.count)
     dur_val = vinfo.get("duration_sec","—")
     for col_m, val, lbl in [
         (m1, str(len(results)),      "Segments Analysed"),
         (m2, str(len(uniq)),         "Unique Actions"),
-        (m3, f"{avg_c*100:.0f}%",    "Avg Confidence"),
+        (m3, format_timestamp(results[0]["start_time"]) if results else "00:00", "Start Time"),
         (m4, str(dur_val)+"s",       "Clip Duration"),
         (m5, top_act[:14],           "Top Action"),
     ]:
@@ -331,12 +328,10 @@ if "results" in st.session_state:
             st.markdown("**📌 Tactical Notes:**")
             for note in card["tactical_notes"]:
                 st.markdown(f"• {note}")
-        rating = card["overall_rating"]
-        st.progress(rating/100, text=f"AI Confidence Rating: {rating}%")
 
-    # ── Timestamp Event Detection ─────────────────────────────────────────────
-    st.markdown("### 🕐 Timestamp Event Detection")
-
+    # ── Action Segment Section ───────────────────────────────────────────────
+    st.markdown("### 🕐 Action Segments")
+    
     # Build structured event list
     event_list = []
     for r in results:
@@ -344,173 +339,111 @@ if "results" in st.session_state:
             "action":     r["top_action"],
             "timestamp":  format_timestamp(r["start_time"]),
             "ts_end":     format_timestamp(r["end_time"]),
-            "confidence": round(r["top_confidence"]*100, 1),
             "segment":    r["segment_id"],
             "start_s":    r["start_time"],
         })
 
-    # Timeline view + Table view tabs
-    tl_tab1, tl_tab2 = st.tabs(["🔵 Timeline View", "📋 Table View"])
+    # Always expanded segments
+    for ev in event_list:
+        lbl = ev["action"]
+        c_  = col(lbl)
+        tl  = card.get("event_timeline", [])
+        expl = next((t["explanation"] for t in tl if t["segment_id"]==ev["segment"]), "")
+        r_match = next((r for r in results if r["segment_id"]==ev["segment"]), None)
+        
+        # Segment Card
+        st.markdown(
+            f'<div class="ev-card" style="border-left-color:{c_}; margin-bottom: 20px; padding: 18px; background: #111827; border-radius: 12px; border-left: 6px solid {c_};">'
+            f'<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom: 8px;">'
+            f'<div>'
+            f'<div style="color:#9CA3AF; font-size:0.8rem; font-weight:600; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Segment {ev["segment"]+1} • {ev["timestamp"]} – {ev["ts_end"]}</div>'
+            f'<div style="font-size:1.4rem; font-weight:800; color:#F9FAFB;">{emo(lbl)} {lbl}</div>'
+            f'</div>'
+            f'<div style="background:rgba(96, 165, 250, 0.1); color:#60A5FA; padding:6px 12px; border-radius:8px; font-weight:800; font-size:1.1rem; border:1px solid rgba(96, 165, 250, 0.2);">'
+            f'⏱ {ev["timestamp"]}'
+            f'</div>'
+            f'</div>'
+            f'<div style="margin-top:12px; margin-bottom:12px;">'
+            f'<span class="badge" style="background:{c_}22; color:{c_}; border:1px solid {c_}44; font-size:0.8rem; padding:4px 12px;">{lbl}</span>'
+            f'</div>'
+            + (f'<div class="comm" style="margin-top:10px; margin-bottom:10px; font-size:0.95rem; line-height:1.5;">🎙️ <b>Commentary:</b> {r_match["commentary"]}</div>' if r_match and r_match.get("commentary") else "")
+            + (f'<div style="color:#6B7280; font-size:0.85rem; margin-top:8px; display:flex; align-items:center;"><span style="margin-right:8px;">🏃</span> Motion: {" • ".join(r_match.get("motion_signature",{}).get("football_hints",[]))}</div>' if r_match and r_match.get("motion_signature",{}).get("football_hints",[]) else "")
+            + f'</div>',
+            unsafe_allow_html=True,
+        )
 
-    with tl_tab1:
-        for ev in event_list:
-            lbl = ev["action"]
-            c_  = col(lbl)
-            # Get tactical explanation from card timeline if available
-            tl  = card.get("event_timeline", [])
-            expl = next((t["explanation"] for t in tl if t["segment_id"]==ev["segment"]), "")
-            st.markdown(
-                f'<div class="ev-card" style="border-left-color:{c_}">'
-                f'<b>{emo(lbl)} {ev["timestamp"]} → {ev["ts_end"]}</b> &nbsp;'
-                f'<span class="badge">{lbl}</span> &nbsp;'
-                f'<small style="color:{c_}">{ev["confidence"]}% confidence</small>'
-                + (f'<br><small style="color:#9CA3AF;margin-top:4px">{expl}</small>' if expl else "")
-                + f'</div>',
-                unsafe_allow_html=True,
-            )
-            if show_comm:
-                r_match = next((r for r in results if r["segment_id"]==ev["segment"]), None)
-                if r_match and r_match.get("commentary"):
-                    st.markdown(
-                        f'<div class="comm">🎙️ <b>Segment {ev["segment"]+1} [{ev["timestamp"]}–{ev["ts_end"]}]:</b> {r_match["commentary"]}</div>',
-                        unsafe_allow_html=True
-                    )
-            # Motion hints
-            r_match2 = next((r for r in results if r["segment_id"]==ev["segment"]), None)
-            if r_match2:
-                hints = r_match2.get("motion_signature",{}).get("football_hints",[])
-                if hints:
-                    st.markdown(
-                        f'<small style="color:#6B7280;padding-left:16px">⚡ Motion: {" • ".join(hints[:3])}</small>',
-                        unsafe_allow_html=True
-                    )
-
-    with tl_tab2:
-        if show_tl_table:
-            ev_df = pd.DataFrame([{
-                "Timestamp":     e["timestamp"],
-                "Action":        e["action"],
-                "Confidence (%)":e["confidence"],
-                "Segment":       e["segment"]+1,
-                "Start (s)":     e["start_s"],
-            } for e in event_list])
-            st.dataframe(ev_df, use_container_width=True, hide_index=True)
-
-        # Expandable analytics cards
-        st.markdown("#### 🔍 Expandable Event Cards")
-        for ev in event_list:
-            lbl = ev["action"]
-            with st.expander(f'{emo(lbl)} {ev["timestamp"]} — {lbl} ({ev["confidence"]}%)', expanded=False):
-                r_match = next((r for r in results if r["segment_id"]==ev["segment"]), None)
-                if r_match:
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.markdown(f"**Action:** {lbl}")
-                        st.markdown(f"**Timestamp:** {ev['timestamp']} → {ev['ts_end']}")
-                        st.markdown(f"**Confidence:** {ev['confidence']}%")
-                        st.progress(min(r_match["top_confidence"],1.0))
-                    with col2:
-                        expl = next((t["explanation"] for t in card.get("event_timeline",[]) if t["segment_id"]==ev["segment"]),"")
-                        st.markdown(f"**Tactical Note:** {expl}")
-                        if r_match.get("commentary"):
-                            st.markdown(f"**Commentary:** *{r_match['commentary']}*")
-                    if r_match.get("top_k_actions"):
-                        st.markdown("**Top Actions:**")
-                        for a in r_match["top_k_actions"][:4]:
-                            st.progress(min(a["confidence"],1.0), text=f'{a["label"]} — {a["confidence"]*100:.0f}%')
-
-    # ── Top-K per Segment ─────────────────────────────────────────────────────
-    st.markdown("### 🏆 Top Actions per Segment")
-    for r in results:
-        seg_lbl = f"Segment {r['segment_id']+1}  ({format_timestamp(r['start_time'])} – {format_timestamp(r['end_time'])})"
-        with st.expander(f"🔍 {seg_lbl}  →  {r['top_action']}", expanded=False):
-            top_k_data = r.get("top_k_actions", [])
-            if top_k_data:
-                labels = [a["label"] for a in top_k_data]
-                confs  = [a["confidence"]*100 for a in top_k_data]
-                clrs   = [col(l) for l in labels]
-                fig = go.Figure(go.Bar(
-                    x=confs, y=labels, orientation="h",
-                    marker=dict(color=clrs, opacity=0.85),
-                    text=[f"{c:.0f}%" for c in confs], textposition="outside",
-                ))
-                fig.update_layout(
-                    plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
-                    font=dict(color="#E5E7EB"), height=260,
-                    xaxis=dict(title="Confidence (%)", range=[0, max(confs)*1.25]),
-                    yaxis=dict(autorange="reversed"),
-                    margin=dict(l=0,r=30,t=5,b=25),
-                )
-                st.plotly_chart(fig, use_container_width=True)
-            st.markdown("**Confidence Breakdown:**")
-            for a in top_k_data[:6]:
-                bc, vc = st.columns([4,1])
-                with bc: st.progress(min(a["confidence"],1.0), text=a["label"])
-                with vc: st.markdown(f'<b style="color:{col(a["label"])}">{a["confidence"]*100:.0f}%</b>', unsafe_allow_html=True)
-
-    # ── Analytics Charts ──────────────────────────────────────────────────────
+    # ── Analytics Charts (Heatmap Only) ──────────────────────────────────────
     st.markdown("### 📈 Analytics Charts")
-    ch1, ch2 = st.columns(2)
-    df = pd.DataFrame([{
-        "Action":     r["top_action"],
-        "Confidence": round(r["top_confidence"]*100, 1),
-        "Time":       format_timestamp(r["start_time"]),
-    } for r in results])
+    
+    # Create a timeline heatmap of motion intensity with 4s markers
+    hm_x = []
+    hm_z = [[]]
+    hm_text = []
+    annotations = []
 
-    with ch1:
-        vc = df["Action"].value_counts().reset_index()
-        vc.columns = ["Action","Count"]
-        fig_pie = px.pie(vc, values="Count", names="Action", hole=0.42,
-                         color="Action", color_discrete_map=COLORS, title="Action Breakdown")
-        fig_pie.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
-                              font=dict(color="#E5E7EB"))
-        st.plotly_chart(fig_pie, use_container_width=True)
+    for i, r in enumerate(results):
+        t_start = r["start_time"]
+        mag = r["motion_signature"].get("avg_magnitude", 0)
+        
+        hm_x.append(t_start)
+        hm_z[0].append(mag)
+        hm_text.append(f"{r['top_action']} ({format_timestamp(t_start)})")
+        
+        # Add annotation for events
+        annotations.append(dict(
+            x=t_start,
+            y=0,
+            text=f"{emo(r['top_action'])} {r['top_action']} @ {format_timestamp(t_start)}",
+            showarrow=True,
+            arrowhead=2,
+            ax=0,
+            ay=-40 - (i % 3) * 30, # Stagger labels more
+            font=dict(size=10, color="#E5E7EB"),
+            bgcolor="rgba(17, 24, 39, 0.85)",
+            bordercolor="#374151",
+            borderwidth=1,
+            borderpad=4,
+        ))
 
-    with ch2:
-        fig_bar = px.bar(df, x="Time", y="Confidence", color="Action",
-                         color_discrete_map=COLORS, title="Confidence per Segment",
-                         labels={"Confidence":"Confidence (%)"})
-        fig_bar.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
-                              font=dict(color="#E5E7EB"), showlegend=False)
-        st.plotly_chart(fig_bar, use_container_width=True)
+    fig_hm = go.Figure(data=go.Heatmap(
+        z=hm_z,
+        x=hm_x,
+        y=["Match Activity"],
+        colorscale='Hot',
+        showscale=True,
+        text=hm_text,
+        hoverinfo="text+z",
+        zmin=0,
+    ))
 
-    # Confidence timeline line chart
-    if len(results) > 2:
-        fig_line = px.line(df, x="Time", y="Confidence", markers=True,
-                           title="Confidence Trend Over Time",
-                           labels={"Confidence":"Confidence (%)"})
-        fig_line.update_traces(line_color="#00C851", marker_color="#FFD700")
-        fig_line.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
-                               font=dict(color="#E5E7EB"))
-        st.plotly_chart(fig_line, use_container_width=True)
-
-    # ── Motion Heatmap ────────────────────────────────────────────────────────
-    if show_heat and heatmaps:
-        st.markdown("### 🗺️ Motion Activity Heatmap")
-        valid_hm = [h for h in heatmaps if h is not None]
-        if valid_hm:
-            import matplotlib.pyplot as plt
-            import seaborn as sns
-            combined = np.mean(valid_hm, axis=0) if len(valid_hm) > 1 else valid_hm[0]
-            fig, ax = plt.subplots(figsize=(10, 5))
-            sns.heatmap(combined, cmap="hot", cbar=True, ax=ax, xticklabels=False, yticklabels=False)
-            ax.set_title("Pitch Motion Intensity (Aggregated)", color="white")
-            fig.patch.set_facecolor('#0E1117')
-            ax.set_facecolor('#0E1117')
-            st.pyplot(fig)
-        else:
-            st.info("Motion heatmap requires at least 2 frames per segment.")
+    fig_hm.update_layout(
+        title="Activity Heatmap (Video Timeline)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#E5E7EB"),
+        height=400,
+        xaxis=dict(
+            title="Video Timeline (Seconds)",
+            dtick=4, # Every 4 seconds
+            tick0=0,
+            gridcolor="#374151",
+            zeroline=False,
+            range=[-1, max(hm_x) + 5] if hm_x else None
+        ),
+        yaxis=dict(showgrid=False, zeroline=False),
+        margin=dict(l=20, r=20, t=100, b=40),
+        annotations=annotations
+    )
+    st.plotly_chart(fig_hm, use_container_width=True)
 
     # ── Detail Table ──────────────────────────────────────────────────────────
     if show_table:
         st.markdown("### 📋 Segment Detail Table")
-        from video_processing import format_timestamp as fmt_ts
         tdf = pd.DataFrame([{
-            "Timestamp":       format_timestamp(r["start_time"]),
-            "Start (s)":       r["start_time"],
-            "End (s)":         r["end_time"],
+            "Segment":         r["segment_id"]+1,
+            "Video Time":      f"⏱ {format_timestamp(r['start_time'])}",
             "Action Detected": r["top_action"],
-            "Confidence (%)":  round(r["top_confidence"]*100, 1),
+            "Motion Type":     " • ".join(r.get("motion_signature",{}).get("football_hints",[])[:3]),
             "Commentary":      r.get("commentary",""),
         } for r in results])
         st.dataframe(tdf, use_container_width=True, hide_index=True)
@@ -527,11 +460,11 @@ if "results" in st.session_state:
     with d3: st.download_button("⬇️ Timeline",    tl_txt,   "event_timeline.txt",    "text/plain",        use_container_width=True)
 
 st.markdown("---")
-st.markdown("""
+st.markdown(\"\"\"
 <div style='text-align:center;padding:12px 0 4px 0;'>
   <span style='color:#6B7280;font-size:.82rem;'>⚽ Football Intelligence Platform &nbsp;·&nbsp; X-CLIP + Optical Flow &nbsp;·&nbsp; YouTube Support &nbsp;·&nbsp; Python 3.11</span><br>
   <span style='color:#34D399;font-size:.88rem;font-weight:700;'>Built by Abhishek</span>
   <span style='color:#6B7280;font-size:.88rem;'> &nbsp;|&nbsp; </span>
   <span style='color:#60A5FA;font-size:.88rem;font-weight:600;'>Assignment for MultiTV Solutions</span>
 </div>
-""", unsafe_allow_html=True)
+\"\"\", unsafe_allow_html=True)

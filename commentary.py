@@ -384,8 +384,7 @@ def generate_match_summary(results: List[Dict]) -> str:
         f"🧠 **Tactical Overview:** AI analysis of this {total_s:.0f}-second clip identifies "
         f"**{unique_n} distinct action types** across {n_segs} segments. The footage is "
         f"**{primary_phase}**, with \"{most_common_action}\" dominating "
-        f"({most_common_count} occurrence{'s' if most_common_count > 1 else ''}). "
-        f"Peak AI confidence reached **{top_conf*100:.0f}%** on \"{top_name}\"."
+        f"({most_common_count} occurrence{'s' if most_common_count > 1 else ''})."
     )
 
     para2 = (
