@@ -354,63 +354,45 @@ if "results" in st.session_state:
     # ── Action Segment Section ───────────────────────────────────────────────
     st.markdown("### 🕐 Action Segments")
     
-    import textwrap
     for r in results:
         lbl = r["top_action"]
         c_  = col(lbl)
-        dur = r["end_time"] - r["start_time"]
         t_start = format_timestamp(r["start_time"])
         t_end   = format_timestamp(r["end_time"])
+        dur = r["end_time"] - r["start_time"]
         
-        # Action Segment Card - FINAL BROADCAST UI
-        card_html = textwrap.dedent(f'''
-            <div style="background: #111827; border-radius: 12px; border-left: 10px solid {c_}; padding: 25px; margin-bottom: 0px; border: 1px solid #374151; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);">
-                <!-- Top Row: Header + Timestamp -->
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <div style="font-weight: 900; color: #9CA3AF; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 1px;">
-                        ⚡ Segment {r["segment_id"]+1}
-                    </div>
-                    <div style="color: #34D399; font-weight: 900; font-size: 1.5rem; display: flex; align-items: center; background: rgba(52, 211, 153, 0.1); padding: 5px 15px; border-radius: 8px; border: 1px solid rgba(52, 211, 153, 0.3);">
-                        <span style="margin-right: 10px; font-size: 1.2rem;">⏱</span> {t_start} → {t_end}
-                    </div>
-                </div>
-                
-                <!-- Second Row: Big Action Badge + Start/End Pills -->
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <div>
-                        <span style="background: {c_}; color: white; padding: 10px 24px; border-radius: 8px; font-weight: 900; font-size: 1.4rem; box-shadow: 0 4px 14px 0 {c_}66; display: inline-flex; align-items: center;">
-                            <span style="margin-right: 12px; font-size: 1.8rem;">⚡</span> {lbl.upper()}
-                        </span>
-                    </div>
-                    <div style="display: flex; gap: 10px;">
-                        <span style="background: #374151; color: #E5E7EB; padding: 4px 12px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; border: 1px solid #4B5563;">START: {t_start}</span>
-                        <span style="background: #374151; color: #E5E7EB; padding: 4px 12px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; border: 1px solid #4B5563;">END: {t_end}</span>
-                    </div>
-                </div>
-                
-                <!-- Third Row: Duration -->
-                <div style="margin-bottom: 20px;">
-                    <span style="background: rgba(156, 163, 175, 0.1); color: #9CA3AF; padding: 6px 14px; border-radius: 6px; font-size: 0.85rem; font-weight: 800; border: 1px solid rgba(156, 163, 175, 0.2);">
-                        ⏳ DURATION: {dur:.0f}s
-                    </span>
-                </div>
-                
-                <div style="height: 1px; background: #374151; margin: 20px 0;"></div>
+        # Segment Header & Badge
+        st.markdown(f'''
+<div style="background: #1F2937; border-radius: 12px; border-left: 10px solid {c_}; padding: 20px; border: 1px solid #374151; margin-bottom: 0px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+        <div style="font-weight: 800; color: #9CA3AF; font-size: 1rem;">⚡ SEGMENT {r["segment_id"]+1}</div>
+        <div style="color: #34D399; font-weight: 900; font-size: 1.3rem;">⏱ {t_start} → {t_end}</div>
+    </div>
+    <div style="margin-bottom: 15px;">
+        <span style="background: {c_}; color: white; padding: 10px 20px; border-radius: 8px; font-weight: 900; font-size: 1.4rem; box-shadow: 0 4px 12px {c_}44;">
+            ⚡ {lbl.upper()}
+        </span>
+    </div>
+    <div style="color: #9CA3AF; font-size: 0.8rem; font-weight: 700; margin-bottom: 15px;">
+        ⏳ DURATION: {dur:.0f}s
+    </div>
+''', unsafe_allow_html=True)
 
-                <!-- Commentary Block -->
-                {f'<div style="background: #0F172A; border-radius: 8px; padding: 18px; margin-top: 15px; border: 1px solid #1E293B; color: #E5E7EB; line-height: 1.6; font-size: 1rem;"><span style="color: #FFD700; margin-right: 10px; font-size: 1.3rem;">🎙️</span> <b>Commentary:</b> {r.get("commentary","")}</div>' if r.get("commentary") else ""}
-                
-                <!-- Motion Tags as Chips -->
-                <div style="margin-top: 20px; display: flex; flex-wrap: wrap; gap: 10px;">
-                    {"".join([f'<span style="background: #1E293B; color: #9CA3AF; padding: 5px 15px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; border: 1px solid #374151;">⚡ {h}</span>' for h in (r.get("motion_signature",{}).get("football_hints",[]) if r else [])])}
-                </div>
-            </div>
-            <!-- Segment Action Intensity Bar Chart Wrapper -->
-            <div style="margin-bottom: 60px; padding: 20px; background: rgba(17, 24, 39, 0.6); border-radius: 0 0 12px 12px; border: 1px solid #374151; border-top: none;">
-        ''')
-        st.markdown(card_html, unsafe_allow_html=True)
-        
-        # Data for 5+ bars
+        if r.get("commentary"):
+            st.markdown(f'''
+    <div style="background: #0F172A; border-radius: 8px; padding: 15px; border-left: 4px solid #FFD700; color: #E5E7EB; line-height: 1.5; font-size: 0.95rem; margin-bottom: 15px;">
+        <span style="color: #FFD700; margin-right: 8px;">🎙️</span> <b>Commentary:</b> {r["commentary"]}
+    </div>
+''', unsafe_allow_html=True)
+
+        hints = r.get("motion_signature", {}).get("football_hints", [])
+        if hints:
+            h_html = "".join([f'<span style="background: #374151; color: #E5E7EB; padding: 4px 10px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; margin-right: 6px; border: 1px solid #4B5563;">⚡ {h}</span>' for h in hints[:5]])
+            st.markdown(f'<div style="display: flex; flex-wrap: wrap; gap: 6px;">{h_html}</div>', unsafe_allow_html=True)
+            
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        # Action Intensity Bar Chart (Always Expanded)
         raw_scores = r.get("scored_actions", [])
         if not raw_scores:
             preds = r.get("top_k_actions", [])
@@ -435,13 +417,17 @@ if "results" in st.session_state:
             template="plotly_dark"
         )
         fig_seg.update_layout(
-            showlegend=False, height=260, margin=dict(l=20, r=20, t=20, b=20),
+            showlegend=False, height=250, margin=dict(l=20, r=20, t=20, b=20),
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
             xaxis=dict(title=None, showticklabels=False, showgrid=False, zeroline=False),
             yaxis=dict(title=None, showgrid=False)
         )
-        st.plotly_chart(fig_seg, use_container_width=True, config={'displayModeBar': False})
-        st.markdown("</div>", unsafe_allow_html=True)
+        with st.container():
+            st.markdown(f'<div style="background: rgba(31, 41, 55, 0.4); border: 1px solid #374151; border-top: none; border-radius: 0 0 12px 12px; padding: 10px; margin-bottom: 40px;">', unsafe_allow_html=True)
+            st.plotly_chart(fig_seg, use_container_width=True, config={'displayModeBar': False})
+            st.markdown('</div>', unsafe_allow_html=True)
+
+    # ── Analytics Charts (Heatmap Only) ──────────────────────────────────────
 
     # ── Analytics Charts (Heatmap Only) ──────────────────────────────────────
     st.markdown("### 📈 Analytics Charts")
