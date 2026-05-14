@@ -460,11 +460,11 @@ if "results" in st.session_state:
     with d3: st.download_button("⬇️ Timeline",    tl_txt,   "event_timeline.txt",    "text/plain",        use_container_width=True)
 
 st.markdown("---")
-st.markdown(\"\"\"
+st.markdown("""
 <div style='text-align:center;padding:12px 0 4px 0;'>
   <span style='color:#6B7280;font-size:.82rem;'>⚽ Football Intelligence Platform &nbsp;·&nbsp; X-CLIP + Optical Flow &nbsp;·&nbsp; YouTube Support &nbsp;·&nbsp; Python 3.11</span><br>
   <span style='color:#34D399;font-size:.88rem;font-weight:700;'>Built by Abhishek</span>
   <span style='color:#6B7280;font-size:.88rem;'> &nbsp;|&nbsp; </span>
   <span style='color:#60A5FA;font-size:.88rem;font-weight:600;'>Assignment for MultiTV Solutions</span>
 </div>
-\"\"\", unsafe_allow_html=True)
+""", unsafe_allow_html=True)
