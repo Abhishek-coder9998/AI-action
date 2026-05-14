@@ -186,26 +186,40 @@ def _generate_football_hints(
         if zones.get("penalty_box", 0) > zones.get("midfield", 0):
             hints.append("Goal Attempt")
             hints.append("Attacking Transition")
-        else:
+        elif lateral_ratio < 0.4: # mostly forward/backward
             hints.append("Counter Attack")
+            hints.append("Sprint")
+        else:
+            hints.append("Dribble")
 
     # ── Midfield heavy → passing / possession
     if zones.get("midfield", 0) > 4.0 and motion_class in ("medium", "high"):
-        hints.append("Through Pass")
+        if lateral_ratio > 0.5:
+            hints.append("Through Pass")
+        else:
+            hints.append("Pass Sequence")
 
     # ── Wing-heavy motion → crossing
     wing_activity = zones.get("left_wing", 0) + zones.get("right_wing", 0)
     mid_activity  = zones.get("midfield", 0)
-    if wing_activity > mid_activity * 1.2:
+    if wing_activity > mid_activity * 1.1:
         hints.append("Crossing Movement")
+        hints.append("Cross")
 
     # ── Goal area activity → goalkeeper save or goal
-    if zones.get("goal_area", 0) > 3.5:
-        hints.append("Goalkeeper Save")
+    if zones.get("goal_area", 0) > 3.0:
+        if magnitude > 5.0:
+            hints.append("Goal Scored")
+        else:
+            hints.append("Goalkeeper Save")
 
     # ── Low / static motion → defending / set pieces
     if motion_class == "low":
-        hints.append("Defending Ball")
+        if zones.get("penalty_box", 0) > 2.0:
+            hints.append("Offside Trap")
+        else:
+            hints.append("Defending Ball")
+            hints.append("Tackle / Sliding")
 
     # ── Dense mid-field motion → pressing
     if zones.get("midfield", 0) > 6.0:

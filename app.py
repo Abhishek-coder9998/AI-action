@@ -237,33 +237,37 @@ if _has_local or _has_stream:
                 
                 # Get current predictions
                 current_preds = raw[i]["top_k_actions"]
+
+                # Calculate Intensity Scores for ALL candidate actions
+                # Intensity = Confidence * (1.0 + motion_bonus)
+                motion_bonus = 1.0 + (sig["avg_magnitude"] / 15.0)
+                scored_actions = []
+                for p in current_preds:
+                    # Boost if matches hint
+                    h_boost = 1.25 if p["label"] in hints else 1.0
+                    score = p["confidence"] * motion_bonus * h_boost
+                    scored_actions.append({"label": p["label"], "score": score, "conf": p["confidence"]})
                 
-                # Try to pick a label that hasn't been used much, prioritizing higher confidence
-                best_label = current_preds[0]["label"]
+                # Sort by score to find the real winner
+                scored_actions = sorted(scored_actions, key=lambda x: x["score"], reverse=True)
+                winner = scored_actions[0]
+                best_label = winner["label"]
                 
-                # If the top label is repeated more than twice, try to pick from hints or next top-k
-                if used_labels.count(best_label) >= 2:
-                    potential = [h for h in hints if h not in used_labels]
-                    if potential:
-                        best_label = potential[0]
-                    else:
-                        for p in current_preds[1:]:
-                            if p["label"] not in used_labels:
-                                best_label = p["label"]
-                                break
-                
-                # If we still have very few unique labels, force a high-confidence hint if available
-                if len(set(used_labels)) < 5 and hints:
-                    for h in hints:
-                        if h not in used_labels:
-                            best_label = h
-                            break
+                # Diversity check: if repeated too much, try next best score
+                if used_labels.count(best_label) >= 2 and len(scored_actions) > 1:
+                    best_label = scored_actions[1]["label"]
+                    winner = scored_actions[1]
 
                 used_labels.append(best_label)
                 raw[i]["top_action"]     = best_label
-                raw[i]["top_confidence"] = next((p["confidence"] for p in current_preds if p["label"] == best_label), 0.55)
+                raw[i]["top_confidence"] = winner["conf"]
+                raw[i]["intensity_score"] = winner["score"]
+                raw[i]["scored_actions"] = scored_actions # Save for charts
                 raw[i]["motion_signature"] = sig
                 heatmaps.append(build_heatmap_data(seg["frames"]))
+                
+                # Debug logging
+                print(f"[DEBUG] Segment {i+1}: {best_label} (Score: {winner['score']:.2f})")
 
             st.write("🎙️ Generating professional commentary…")
             from commentary import generate_full_commentary, generate_match_summary, generate_match_analysis_card
@@ -368,68 +372,89 @@ if "results" in st.session_state:
         r_match = next((r for r in results if r["segment_id"]==ev["segment"]), None)
         dur = r_match["end_time"] - r_match["start_time"] if r_match else 15
         
-        # Enhanced Segment Card (No indentation to prevent code-block rendering)
+        # Enhanced Segment Card - REDESIGNED LAYOUT
         st.markdown(f'''
-<div style="background: #111827; border-radius: 12px; border-left: 10px solid {c_}; padding: 20px; margin-bottom: 25px; border: 1px solid #374151; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
-<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
-<div style="font-weight: 700; color: #9CA3AF; font-size: 0.9rem;">
-SEGMENT {ev["segment"]+1} • {ev["timestamp"]} → {ev["ts_end"]}
-</div>
-<div style="color: #34D399; font-weight: 900; font-size: 1.2rem; display: flex; align-items: center;">
-<span style="margin-right: 6px;">⏱</span> {ev["timestamp"]}
-</div>
-</div>
-<div style="margin-bottom: 15px;">
-<span style="background: {c_}22; color: {c_}; padding: 6px 16px; border-radius: 20px; font-weight: 800; font-size: 1.1rem; border: 2px solid {c_}66; display: inline-flex; align-items: center;">
-<span style="margin-right: 8px; font-size: 1.3rem;">{emo(lbl)}</span> {lbl.upper()}
-</span>
-</div>
-<div style="margin-bottom: 20px;">
-<span style="background: #1E293B; color: #9CA3AF; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase;">
-⏱ Duration: {dur:.0f}s
-</span>
-</div>
+<div style="background: #111827; border-radius: 12px; border-left: 10px solid {c_}; padding: 25px; margin-bottom: 0px; border: 1px solid #374151; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);">
+    <!-- Top Row: Header + Timestamp -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+        <div style="font-weight: 900; color: #9CA3AF; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 1px;">
+            ⚡ Segment {ev["segment"]+1}
+        </div>
+        <div style="color: #34D399; font-weight: 900; font-size: 1.5rem; display: flex; align-items: center; background: rgba(52, 211, 153, 0.1); padding: 5px 15px; border-radius: 8px; border: 1px solid rgba(52, 211, 153, 0.3);">
+            <span style="margin-right: 10px; font-size: 1.2rem;">⏱</span> {ev["timestamp"]} → {ev["ts_end"]}
+        </div>
+    </div>
+    
+    <!-- Second Row: Big Action Badge + Start/End Pills -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <div>
+            <span style="background: {c_}; color: white; padding: 10px 24px; border-radius: 8px; font-weight: 900; font-size: 1.4rem; box-shadow: 0 4px 14px 0 {c_}66; display: inline-flex; align-items: center;">
+                <span style="margin-right: 12px; font-size: 1.8rem;">{emo(lbl)}</span> {lbl.upper()}
+            </span>
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <span style="background: #374151; color: #E5E7EB; padding: 4px 12px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; border: 1px solid #4B5563;">START: {ev["timestamp"]}</span>
+            <span style="background: #374151; color: #E5E7EB; padding: 4px 12px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; border: 1px solid #4B5563;">END: {ev["ts_end"]}</span>
+        </div>
+    </div>
+    
+    <!-- Third Row: Duration -->
+    <div style="margin-bottom: 20px;">
+        <span style="background: rgba(156, 163, 175, 0.1); color: #9CA3AF; padding: 6px 14px; border-radius: 6px; font-size: 0.85rem; font-weight: 800; border: 1px solid rgba(156, 163, 175, 0.2);">
+            ⏳ DURATION: {dur:.0f}s
+        </span>
+    </div>
+    
+    <div style="height: 1px; background: #374151; margin: 20px 0;"></div>
+
+    <!-- Commentary Block -->
 ''' + (f'''
-<div style="background: #0F172A; border-radius: 8px; padding: 14px; margin-top: 10px; border: 1px solid #1E293B; color: #E5E7EB; line-height: 1.5;">
-<span style="color: #FFD700; margin-right: 6px; font-size: 1.1rem;">🎙️</span> <b>Commentary:</b> {r_match["commentary"]}
-</div>
-''' if r_match and r_match.get("commentary") else "") + f'''</div>
+    <div style="background: #0F172A; border-radius: 8px; padding: 18px; margin-top: 15px; border: 1px solid #1E293B; color: #E5E7EB; line-height: 1.6; font-size: 1rem;">
+        <span style="color: #FFD700; margin-right: 10px; font-size: 1.3rem;">🎙️</span> <b>Commentary:</b> {r_match["commentary"]}
+    </div>
+''' if r_match and r_match.get("commentary") else "") + f'''
+    <!-- Motion Tags as Chips -->
+    <div style="margin-top: 20px; display: flex; flex-wrap: wrap; gap: 10px;">
+        {"".join([f'<span style="background: #1E293B; color: #9CA3AF; padding: 5px 15px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; border: 1px solid #374151;">⚡ {h}</span>' for h in (r_match.get("motion_signature",{}).get("football_hints",[]) if r_match else [])])}
+    </div>
 </div>
 ''', unsafe_allow_html=True)
 
         # Segment Action Intensity Bar Chart Wrapper
         st.markdown('''
-<div style="margin-bottom: 40px; padding: 10px; background: rgba(31, 41, 55, 0.3); border-radius: 0 0 12px 12px; border: 1px solid #374151; border-top: none;">
+<div style="margin-bottom: 50px; padding: 20px; background: rgba(17, 24, 39, 0.6); border-radius: 0 0 12px 12px; border: 1px solid #374151; border-top: none;">
 ''', unsafe_allow_html=True)
-        preds = r_match["top_k_actions"] if r_match else []
-        if len(preds) < 5:
-            # Pad with other common actions if needed
-            others = ["Pass", "Dribble", "Press", "Ball in Play", "Defending Ball"]
-            existing = [p["label"] for p in preds]
-            for o in others:
-                if o not in existing and len(preds) < 5:
-                    preds.append({"label": o, "confidence": 0.1 + (0.05 * len(preds))})
         
-        # Calculate Action Score (Intensity)
-        # We use confidence as a proxy for relative dominance, but label it as Intensity
+        # Data for 5+ bars using the saved scored_actions
+        raw_scores = r_match.get("scored_actions", []) if r_match else []
+        if len(raw_scores) < 5:
+            # Pad if needed
+            others = ["Pass", "Dribble", "Press", "Ball in Play", "Defending Ball"]
+            existing = [p["label"] for p in raw_scores]
+            for o in others:
+                if o not in existing and len(raw_scores) < 5:
+                    raw_scores.append({"label": o, "score": 0.1, "conf": 0.1})
+        
         chart_data = pd.DataFrame([{
             "Action": p["label"],
-            "Intensity": p["confidence"] * (1.0 + (r_match["motion_signature"]["avg_magnitude"]/20.0 if r_match else 0))
-        } for p in preds])
+            "Intensity": p["score"]
+        } for p in raw_scores])
+        
+        # Sort chart data to ensure top action is first
+        chart_data = chart_data.sort_values("Intensity", ascending=True)
         
         fig_seg = px.bar(
             chart_data, x="Intensity", y="Action", orientation='h',
             color="Action", color_discrete_map=COLORS,
-            title=f"🔍 Segment {ev['segment']+1} ({ev['timestamp']} – {ev['ts_end']}) → {lbl}"
+            title=f"📊 Action Dominance Analysis: {ev['timestamp']} – {ev['ts_end']}"
         )
         fig_seg.update_layout(
-            showlegend=False, height=280, margin=dict(l=20, r=20, t=40, b=20),
+            showlegend=False, height=300, margin=dict(l=20, r=20, t=60, b=20),
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="#9CA3AF", size=10),
-            xaxis=dict(title="Action Intensity Score", showticklabels=False, showgrid=False),
+            font=dict(color="#9CA3AF", size=11),
+            xaxis=dict(title="Action Intensity Score (No %)", showticklabels=False, showgrid=False),
             yaxis=dict(title=None, showgrid=False)
         )
-        # Remove % labels (no text argument in px.bar call above means no text shown)
         st.plotly_chart(fig_seg, use_container_width=True, config={'displayModeBar': False})
         st.markdown("</div>", unsafe_allow_html=True)
 
