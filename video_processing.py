@@ -176,6 +176,17 @@ class VideoProcessor:
             if f_end <= f_start:
                 continue
 
+            # Ensure minimum duration of 4 seconds for the last segment if possible
+            actual_dur = t_end - t_start
+            if actual_dur < 4.0 and len(segments) > 0:
+                # Append this tiny tail to the previous segment instead of creating a new one
+                segments[-1]["end_time"] = round(t_end, 2)
+                segments[-1]["duration"] = round(segments[-1]["end_time"] - segments[-1]["start_time"], 2)
+                continue
+            elif actual_dur < 1.0:
+                # Too small to be a segment at all
+                continue
+
             # Sample evenly-spaced frame indices
             indices = np.linspace(f_start, f_end - 1, frames_per_segment, dtype=int)
             frames: List[Image.Image] = []

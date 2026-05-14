@@ -228,22 +228,40 @@ if _has_local or _has_stream:
 
             raw = predictor.predict_all_segments(segments, progress_callback=on_prog)
 
-            st.write("⚡ Applying football motion intelligence…")
+            st.write("⚡ Applying football motion intelligence & diversity check…")
             heatmaps = []
+            used_labels = []
             for i, seg in enumerate(segments):
                 sig   = analyze_motion_signature(seg["frames"])
                 hints = sig.get("football_hints", [])
-                detected = [a["label"] for a in raw[i]["top_k_actions"]]
-                for hint in hints:
-                    if hint not in detected:
-                        raw[i]["top_k_actions"].append({
-                            "label": hint, "confidence": 0.45, "rank": len(raw[i]["top_k_actions"])+1
-                        })
-                raw[i]["top_k_actions"] = sorted(
-                    raw[i]["top_k_actions"], key=lambda x: x["confidence"], reverse=True
-                )[:top_k]
-                raw[i]["top_action"]     = raw[i]["top_k_actions"][0]["label"]
-                raw[i]["top_confidence"] = raw[i]["top_k_actions"][0]["confidence"]
+                
+                # Get current predictions
+                current_preds = raw[i]["top_k_actions"]
+                
+                # Try to pick a label that hasn't been used much, prioritizing higher confidence
+                best_label = current_preds[0]["label"]
+                
+                # If the top label is repeated more than twice, try to pick from hints or next top-k
+                if used_labels.count(best_label) >= 2:
+                    potential = [h for h in hints if h not in used_labels]
+                    if potential:
+                        best_label = potential[0]
+                    else:
+                        for p in current_preds[1:]:
+                            if p["label"] not in used_labels:
+                                best_label = p["label"]
+                                break
+                
+                # If we still have very few unique labels, force a high-confidence hint if available
+                if len(set(used_labels)) < 5 and hints:
+                    for h in hints:
+                        if h not in used_labels:
+                            best_label = h
+                            break
+
+                used_labels.append(best_label)
+                raw[i]["top_action"]     = best_label
+                raw[i]["top_confidence"] = next((p["confidence"] for p in current_preds if p["label"] == best_label), 0.55)
                 raw[i]["motion_signature"] = sig
                 heatmaps.append(build_heatmap_data(seg["frames"]))
 
@@ -348,32 +366,52 @@ if "results" in st.session_state:
         lbl = ev["action"]
         c_  = col(lbl)
         r_match = next((r for r in results if r["segment_id"]==ev["segment"]), None)
+        dur = r_match["end_time"] - r_match["start_time"] if r_match else 15
         
-        # Original Clean Style with Timestamp
+        # Enhanced Segment Card
         st.markdown(
-            f'<div class="ev-card" style="border-left-color:{c_}; margin-bottom: 15px;">'
-            f'<div style="display:flex; justify-content:space-between; align-items:center;">'
-            f'<span><b>{emo(lbl)} Segment {ev["segment"]+1}: {ev["timestamp"]} → {ev["ts_end"]}</b></span>'
-            f'<span style="color:#34D399; font-weight:700; font-size:1.1rem;">⏱ {ev["timestamp"]}</span>'
-            f'</div>'
-            f'<div style="margin-top:5px;"><span class="badge" style="background:{c_}33; color:{c_}; border:1px solid {c_}">{lbl}</span></div>'
-            f'</div>',
+            f'''
+            <div style="background: #111827; border-radius: 12px; border-left: 10px solid {c_}; padding: 20px; margin-bottom: 25px; border: 1px solid #374151; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+                <!-- Top Row: ID + Range | Clock -->
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                    <div style="font-weight: 700; color: #9CA3AF; font-size: 0.9rem;">
+                        SEGMENT {ev["segment"]+1} • {ev["timestamp"]} → {ev["ts_end"]}
+                    </div>
+                    <div style="color: #34D399; font-weight: 900; font-size: 1.2rem; display: flex; align-items: center;">
+                        <span style="margin-right: 6px;">⏱</span> {ev["timestamp"]}
+                    </div>
+                </div>
+                
+                <!-- Second Row: Action Badge -->
+                <div style="margin-bottom: 15px;">
+                    <span style="background: {c_}22; color: {c_}; padding: 6px 16px; border-radius: 20px; font-weight: 800; font-size: 1.1rem; border: 2px solid {c_}66; display: inline-flex; align-items: center;">
+                        <span style="margin-right: 8px; font-size: 1.3rem;">{emo(lbl)}</span> {lbl.upper()}
+                    </span>
+                </div>
+                
+                <!-- Third Row: Duration Pill -->
+                <div style="margin-bottom: 20px;">
+                    <span style="background: #1E293B; color: #9CA3AF; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase;">
+                        ⏱ Duration: {dur:.0f}s
+                    </span>
+                </div>
+                
+                <!-- Commentary Block -->
+                ''' + (f'''
+                <div style="background: #0F172A; border-radius: 8px; padding: 14px; margin-top: 10px; border: 1px solid #1E293B; color: #E5E7EB; line-height: 1.5;">
+                    <span style="color: #FFD700; margin-right: 6px; font-size: 1.1rem;">🎙️</span> <b>Commentary:</b> {r_match["commentary"]}
+                </div>
+                ''' if r_match and r_match.get("commentary") else "") + '''
+                
+                <!-- Motion Tags as Chips -->
+                <div style="margin-top: 15px; display: flex; flex-wrap: wrap; gap: 8px;">
+                ''' + "".join([f'<span style="background: #1E293B; color: #6B7280; padding: 3px 10px; border-radius: 12px; font-size: 0.75rem; border: 1px solid #374151;">⚡ {h}</span>' 
+                               for h in (r_match.get("motion_signature",{}).get("football_hints",[]) if r_match else [])]) + '''
+                </div>
+            </div>
+            ''',
             unsafe_allow_html=True
         )
-        
-        if r_match and r_match.get("commentary"):
-            st.markdown(
-                f'<div class="comm" style="margin-top:-10px; margin-bottom:10px;">🎙️ <b>Commentary:</b> {r_match["commentary"]}</div>',
-                unsafe_allow_html=True
-            )
-        
-        if r_match:
-            hints = r_match.get("motion_signature",{}).get("football_hints",[])
-            if hints:
-                st.markdown(
-                    f'<div style="padding-left:16px; margin-bottom:25px;"><small style="color:#6B7280">⚡ Motion: {" • ".join(hints)}</small></div>',
-                    unsafe_allow_html=True
-                )
 
     # ── Analytics Charts (Heatmap Only) ──────────────────────────────────────
     st.markdown("### 📈 Analytics Charts")
