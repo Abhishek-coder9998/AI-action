@@ -368,50 +368,37 @@ if "results" in st.session_state:
         r_match = next((r for r in results if r["segment_id"]==ev["segment"]), None)
         dur = r_match["end_time"] - r_match["start_time"] if r_match else 15
         
-        # Enhanced Segment Card
-        st.markdown(
-            f'''
-            <div style="background: #111827; border-radius: 12px; border-left: 10px solid {c_}; padding: 20px; margin-bottom: 25px; border: 1px solid #374151; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
-                <!-- Top Row: ID + Range | Clock -->
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
-                    <div style="font-weight: 700; color: #9CA3AF; font-size: 0.9rem;">
-                        SEGMENT {ev["segment"]+1} • {ev["timestamp"]} → {ev["ts_end"]}
-                    </div>
-                    <div style="color: #34D399; font-weight: 900; font-size: 1.2rem; display: flex; align-items: center;">
-                        <span style="margin-right: 6px;">⏱</span> {ev["timestamp"]}
-                    </div>
-                </div>
-                
-                <!-- Second Row: Action Badge -->
-                <div style="margin-bottom: 15px;">
-                    <span style="background: {c_}22; color: {c_}; padding: 6px 16px; border-radius: 20px; font-weight: 800; font-size: 1.1rem; border: 2px solid {c_}66; display: inline-flex; align-items: center;">
-                        <span style="margin-right: 8px; font-size: 1.3rem;">{emo(lbl)}</span> {lbl.upper()}
-                    </span>
-                </div>
-                
-                <!-- Third Row: Duration Pill -->
-                <div style="margin-bottom: 20px;">
-                    <span style="background: #1E293B; color: #9CA3AF; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase;">
-                        ⏱ Duration: {dur:.0f}s
-                    </span>
-                </div>
-                
-                <!-- Commentary Block -->
-                ''' + (f'''
-                <div style="background: #0F172A; border-radius: 8px; padding: 14px; margin-top: 10px; border: 1px solid #1E293B; color: #E5E7EB; line-height: 1.5;">
-                    <span style="color: #FFD700; margin-right: 6px; font-size: 1.1rem;">🎙️</span> <b>Commentary:</b> {r_match["commentary"]}
-                </div>
-                ''' if r_match and r_match.get("commentary") else "") + '''
-                
-                <!-- Motion Tags as Chips -->
-                <div style="margin-top: 15px; display: flex; flex-wrap: wrap; gap: 8px;">
-                ''' + "".join([f'<span style="background: #1E293B; color: #6B7280; padding: 3px 10px; border-radius: 12px; font-size: 0.75rem; border: 1px solid #374151;">⚡ {h}</span>' 
-                               for h in (r_match.get("motion_signature",{}).get("football_hints",[]) if r_match else [])]) + '''
-                </div>
-            </div>
-            ''',
-            unsafe_allow_html=True
-        )
+        # Enhanced Segment Card (No indentation to prevent code-block rendering)
+        st.markdown(f'''
+<div style="background: #111827; border-radius: 12px; border-left: 10px solid {c_}; padding: 20px; margin-bottom: 25px; border: 1px solid #374151; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+<div style="font-weight: 700; color: #9CA3AF; font-size: 0.9rem;">
+SEGMENT {ev["segment"]+1} • {ev["timestamp"]} → {ev["ts_end"]}
+</div>
+<div style="color: #34D399; font-weight: 900; font-size: 1.2rem; display: flex; align-items: center;">
+<span style="margin-right: 6px;">⏱</span> {ev["timestamp"]}
+</div>
+</div>
+<div style="margin-bottom: 15px;">
+<span style="background: {c_}22; color: {c_}; padding: 6px 16px; border-radius: 20px; font-weight: 800; font-size: 1.1rem; border: 2px solid {c_}66; display: inline-flex; align-items: center;">
+<span style="margin-right: 8px; font-size: 1.3rem;">{emo(lbl)}</span> {lbl.upper()}
+</span>
+</div>
+<div style="margin-bottom: 20px;">
+<span style="background: #1E293B; color: #9CA3AF; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase;">
+⏱ Duration: {dur:.0f}s
+</span>
+</div>
+''' + (f'''
+<div style="background: #0F172A; border-radius: 8px; padding: 14px; margin-top: 10px; border: 1px solid #1E293B; color: #E5E7EB; line-height: 1.5;">
+<span style="color: #FFD700; margin-right: 6px; font-size: 1.1rem;">🎙️</span> <b>Commentary:</b> {r_match["commentary"]}
+</div>
+''' if r_match and r_match.get("commentary") else "") + f'''
+<div style="margin-top: 15px; display: flex; flex-wrap: wrap; gap: 8px;">
+{"".join([f'<span style="background: #1E293B; color: #6B7280; padding: 3px 10px; border-radius: 12px; font-size: 0.75rem; border: 1px solid #374151;">⚡ {h}</span>' for h in (r_match.get("motion_signature",{}).get("football_hints",[]) if r_match else [])])}
+</div>
+</div>
+''', unsafe_allow_html=True)
 
     # ── Analytics Charts (Heatmap Only) ──────────────────────────────────────
     st.markdown("### 📈 Analytics Charts")
