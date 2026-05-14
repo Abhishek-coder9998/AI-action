@@ -361,7 +361,7 @@ if "results" in st.session_state:
         t_start = format_timestamp(r["start_time"])
         t_end   = format_timestamp(r["end_time"])
         
-        # Action Segment Card - EXACT HTML
+        # Action Segment Card - FINAL BROADCAST UI
         st.markdown(f'''
 <div style="background: #111827; border-radius: 12px; border-left: 10px solid {c_}; padding: 25px; margin-bottom: 0px; border: 1px solid #374151; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);">
     <!-- Top Row: Header + Timestamp -->
@@ -378,7 +378,7 @@ if "results" in st.session_state:
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
         <div>
             <span style="background: {c_}; color: white; padding: 10px 24px; border-radius: 8px; font-weight: 900; font-size: 1.4rem; box-shadow: 0 4px 14px 0 {c_}66; display: inline-flex; align-items: center;">
-                <span style="margin-right: 12px; font-size: 1.8rem;">{emo(lbl)}</span> {lbl.upper()}
+                <span style="margin-right: 12px; font-size: 1.8rem;">⚡</span> {lbl.upper()}
             </span>
         </div>
         <div style="display: flex; gap: 10px;">
