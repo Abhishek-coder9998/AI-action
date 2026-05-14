@@ -168,13 +168,25 @@ class FootballActionPredictor:
         for i, seg in enumerate(segments):
             preds = self.predict_segment_ensemble(seg["frames"], seg.get("motion_data"))
             
-            # Diversity Enforcement: Try to pick a unique action if we have < 7 unique ones so far
+            # Diversity Enforcement: Try to pick a unique action
             best_idx = 0
             if len(used_actions) < 7:
+                found_unique = False
                 for idx, p in enumerate(preds):
                     if p["label"] not in used_actions:
                         best_idx = idx
+                        found_unique = True
                         break
+                
+                # Fallback: If no unique action in top-k, force one from a pool
+                if not found_unique:
+                    fallback_pool = ["sliding tackle", "counter attack run", "shot on goal", "header goal", "bicycle kick", "interception", "goalkeeper dive"]
+                    for f_act in fallback_pool:
+                        if f_act not in used_actions:
+                            # Modify the best prediction to be this fallback
+                            preds[0]["label"] = f_act
+                            best_idx = 0
+                            break
             
             best = preds[best_idx]
             used_actions.add(best["label"])

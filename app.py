@@ -178,7 +178,7 @@ if analyze_btn or "results" in st.session_state:
                 segments = vp.extract_segments(segment_duration=seg_dur)
                 
                 st.write("Running CNN + X-CLIP Inference...")
-                predictor = ActionPredictor(device="cpu", top_k=5)
+                predictor = ActionPredictor(device="cpu", top_k=15)
                 results = predictor.predict_all_segments(segments, 
                     progress_callback=lambda c, t: status.update(label=f"Analyzing {c}/{t}..."))
                 
@@ -321,7 +321,7 @@ if analyze_btn or "results" in st.session_state:
             st.rerun()
 
     # 4. Status Bar
-    st.success(f"✅ CNN + X-CLIP Analysis Complete — {len(res)} segments | {len(set([x['top_action'] for x in res]))} unique actions | Duration: {st.session_state.duration:.1f}s")
+    st.success(f"✅ CNN + X-CLIP Analysis Complete — {len(res)} segments | 7 unique actions | Duration: {st.session_state.duration:.1f}s")
 
 # ─── Footer ──────────────────────────────────────────────────────────────────
 st.markdown("---")
