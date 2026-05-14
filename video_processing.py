@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 # ─── Constants ───────────────────────────────────────────────────────────────
 MAX_VIDEO_DURATION_SEC: float  = 600.0
-SEGMENT_DURATION_SEC: float    = 5.0  # Reduced to capture more actions
+SEGMENT_DURATION_SEC: float    = 4.0  # Slightly smaller for more diversity
 SUPPORTED_FORMATS: List[str]   = [".mp4", ".mov", ".avi", ".webm", ".mkv"]
 THUMBNAIL_SIZE: Tuple[int, int] = (320, 180)
 
@@ -54,13 +54,17 @@ class VideoProcessor:
         sampling_rate: float = 0.5, # 1 frame every 0.5 seconds
     ) -> List[Dict]:
         """
-        Extracts 1 frame every 0.5s and calculates Farneback Optical Flow.
+        Extracts frames and ensures min 2.0s gap between segments.
         """
         cap = cv2.VideoCapture(self.video_path)
         if not cap.isOpened():
             raise VideoProcessingError("Cannot open video for frame extraction.")
 
         segments: List[Dict] = []
+        # Force at least 7 segments if video is long enough
+        if self._duration > 14.0:
+            segment_duration = min(segment_duration, self._duration / 7.0)
+            
         num_segments = int(np.ceil(self._duration / segment_duration))
         
         total_extracted_frames = 0
@@ -69,6 +73,12 @@ class VideoProcessor:
         for seg_idx in range(num_segments):
             t_start = seg_idx * segment_duration
             t_end   = min((seg_idx + 1) * segment_duration, self._duration)
+
+            # Ensure minimum 2.0s gap
+            if (t_end - t_start) < 2.0 and seg_idx > 0:
+                segments[-1]["end_time"] = round(t_end, 2)
+                segments[-1]["duration"] = round(segments[-1]["end_time"] - segments[-1]["start_time"], 2)
+                continue
 
             timestamps = np.arange(t_start, t_end, sampling_rate)
             frames_data = []
@@ -115,7 +125,7 @@ class VideoProcessor:
                 dom_dir = max(set(seg_motion_dirs), key=seg_motion_dirs.count) if seg_motion_dirs else "unknown"
 
                 segments.append({
-                    "segment_id": seg_idx,
+                    "segment_id": len(segments),
                     "start_time": round(t_start, 2),
                     "end_time":   round(t_end, 2),
                     "duration":   round(t_end - t_start, 2),

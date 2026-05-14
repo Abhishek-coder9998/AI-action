@@ -75,7 +75,8 @@ def generate_tags(action: str) -> List[str]:
     # Dynamic Hashtag Generation based on action type
     tags = ["#Football", "#Analytics"]
     action = action.lower()
-    if "kick" in action or "shot" in action: tags = ["#Attack", "#Kick", "#Shot"]
+    if "goal kick" in action: tags = ["#GoalKick", "#Restart", "#Defense"]
+    elif "kick" in action or "shot" in action: tags = ["#Attack", "#Kick", "#Shot"]
     elif "tackle" in action or "block" in action: tags = ["#Defense", "#Challenge", "#Solid"]
     elif "save" in action or "dive" in action: tags = ["#Goalie", "#Save", "#Reflex"]
     elif "pass" in action or "cross" in action: tags = ["#Playmaking", "#Vision", "#KeyPass"]

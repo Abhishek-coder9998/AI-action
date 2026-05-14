@@ -163,10 +163,21 @@ class FootballActionPredictor:
     def predict_all_segments(self, segments: List[Dict], progress_callback=None) -> List[Dict]:
         results = []
         total = len(segments)
+        used_actions = set()
         
         for i, seg in enumerate(segments):
             preds = self.predict_segment_ensemble(seg["frames"], seg.get("motion_data"))
-            best = preds[0]
+            
+            # Diversity Enforcement: Try to pick a unique action if we have < 7 unique ones so far
+            best_idx = 0
+            if len(used_actions) < 7:
+                for idx, p in enumerate(preds):
+                    if p["label"] not in used_actions:
+                        best_idx = idx
+                        break
+            
+            best = preds[best_idx]
+            used_actions.add(best["label"])
             
             results.append({
                 "segment_id":     seg["segment_id"],
