@@ -10,7 +10,8 @@ from PIL import Image
 # Internal modules
 from video_processing import (
     VideoProcessor, 
-    format_timestamp
+    format_timestamp,
+    is_youtube_url
 )
 from predictor import ActionPredictor
 from football_intelligence import (
