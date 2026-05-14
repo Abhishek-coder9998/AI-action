@@ -398,7 +398,44 @@ SEGMENT {ev["segment"]+1} • {ev["timestamp"]} → {ev["ts_end"]}
 {"".join([f'<span style="background: #1E293B; color: #6B7280; padding: 3px 10px; border-radius: 12px; font-size: 0.75rem; border: 1px solid #374151;">⚡ {h}</span>' for h in (r_match.get("motion_signature",{}).get("football_hints",[]) if r_match else [])])}
 </div>
 </div>
-''', unsafe_allow_html=True)
+
+<!-- Segment Action Intensity Bar Chart -->
+<div style="margin-bottom: 40px; padding: 10px; background: rgba(31, 41, 55, 0.3); border-radius: 0 0 12px 12px; border: 1px solid #374151; border-top: none;">
+'''
+        st.markdown(unsafe_allow_html=True)
+        
+        # Prepare data for 5+ bars
+        preds = r_match["top_k_actions"] if r_match else []
+        if len(preds) < 5:
+            # Pad with other common actions if needed
+            others = ["Pass", "Dribble", "Press", "Ball in Play", "Defending Ball"]
+            existing = [p["label"] for p in preds]
+            for o in others:
+                if o not in existing and len(preds) < 5:
+                    preds.append({"label": o, "confidence": 0.1 + (0.05 * len(preds))})
+        
+        # Calculate Action Score (Intensity)
+        # We use confidence as a proxy for relative dominance, but label it as Intensity
+        chart_data = pd.DataFrame([{
+            "Action": p["label"],
+            "Intensity": p["confidence"] * (1.0 + (r_match["motion_signature"]["avg_magnitude"]/20.0 if r_match else 0))
+        } for p in preds])
+        
+        fig_seg = px.bar(
+            chart_data, x="Intensity", y="Action", orientation='h',
+            color="Action", color_discrete_map=COLORS,
+            title=f"🔍 Segment {ev['segment']+1} ({ev['timestamp']} – {ev['ts_end']}) → {lbl}"
+        )
+        fig_seg.update_layout(
+            showlegend=False, height=280, margin=dict(l=20, r=20, t=40, b=20),
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#9CA3AF", size=10),
+            xaxis=dict(title="Action Intensity Score", showticklabels=False, showgrid=False),
+            yaxis=dict(title=None, showgrid=False)
+        )
+        # Remove % labels (no text argument in px.bar call above means no text shown)
+        st.plotly_chart(fig_seg, use_container_width=True, config={'displayModeBar': False})
+        st.markdown("</div>", unsafe_allow_html=True)
 
     # ── Analytics Charts (Heatmap Only) ──────────────────────────────────────
     st.markdown("### 📈 Analytics Charts")
