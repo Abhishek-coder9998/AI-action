@@ -309,13 +309,13 @@ if "results" in st.session_state:
     m1,m2,m3,m4,m5 = st.columns(5)
     acts   = [r["top_action"] for r in results]
     uniq   = list(dict.fromkeys(acts))
-    top_act = max(set(acts), key=acts.count)
+    top_act = max(set(acts), key=acts.count) if acts else "—"
     dur_val = vinfo.get("duration_sec","—")
     for col_m, val, lbl in [
         (m1, str(len(results)),      "Segments Analysed"),
         (m2, str(len(uniq)),         "Unique Actions"),
         (m3, format_timestamp(results[0]["start_time"]) if results else "00:00", "Start Time"),
-        (m4, str(dur_val)+"s",       "Clip Duration"),
+        (m4, f"{dur_val}s",          "Clip Duration"),
         (m5, top_act[:14],           "Top Action"),
     ]:
         col_m.markdown(
@@ -337,7 +337,7 @@ if "results" in st.session_state:
             f'<span style="color:#34D399;font-size:1.1rem;">{card["style"]}</span></div>',
             unsafe_allow_html=True
         )
-        checks = card["theme_checks"]
+        checks = card.get("theme_checks", {})
         items  = list(checks.items())
         for row_start in range(0, len(items), 3):
             row  = items[row_start:row_start+3]
@@ -346,7 +346,7 @@ if "results" in st.session_state:
                 icon = "✅" if detected else "⬜"
                 clr  = "#34D399" if detected else "#6B7280"
                 rcols[ci].markdown(f'<span style="color:{clr}">{icon} {theme}</span>', unsafe_allow_html=True)
-        if card["tactical_notes"]:
+        if card.get("tactical_notes"):
             st.markdown("**📌 Tactical Notes:**")
             for note in card["tactical_notes"]:
                 st.markdown(f"• {note}")
@@ -354,34 +354,23 @@ if "results" in st.session_state:
     # ── Action Segment Section ───────────────────────────────────────────────
     st.markdown("### 🕐 Action Segments")
     
-    # Build structured event list
-    event_list = []
-    for r in results:
-        event_list.append({
-            "action":     r["top_action"],
-            "timestamp":  format_timestamp(r["start_time"]),
-            "ts_end":     format_timestamp(r["end_time"]),
-            "segment":    r["segment_id"],
-            "start_s":    r["start_time"],
-        })
-
-    # Always expanded segments
-    for ev in event_list:
-        lbl = ev["action"]
+    for ev_idx, r in enumerate(results):
+        lbl = r["top_action"]
         c_  = col(lbl)
-        r_match = next((r for r in results if r["segment_id"]==ev["segment"]), None)
-        dur = r_match["end_time"] - r_match["start_time"] if r_match else 15
+        dur = r["end_time"] - r["start_time"]
+        t_start = format_timestamp(r["start_time"])
+        t_end   = format_timestamp(r["end_time"])
         
-        # Enhanced Segment Card - REDESIGNED LAYOUT
+        # Enhanced Segment Card - EXACT HTML ALIGNMENT
         st.markdown(f'''
 <div style="background: #111827; border-radius: 12px; border-left: 10px solid {c_}; padding: 25px; margin-bottom: 0px; border: 1px solid #374151; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);">
     <!-- Top Row: Header + Timestamp -->
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
         <div style="font-weight: 900; color: #9CA3AF; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 1px;">
-            ⚡ Segment {ev["segment"]+1}
+            ⚡ Segment {r["segment_id"]+1}
         </div>
         <div style="color: #34D399; font-weight: 900; font-size: 1.5rem; display: flex; align-items: center; background: rgba(52, 211, 153, 0.1); padding: 5px 15px; border-radius: 8px; border: 1px solid rgba(52, 211, 153, 0.3);">
-            <span style="margin-right: 10px; font-size: 1.2rem;">⏱</span> {ev["timestamp"]} → {ev["ts_end"]}
+            <span style="margin-right: 10px; font-size: 1.2rem;">⏱</span> {t_start} → {t_end}
         </div>
     </div>
     
@@ -393,8 +382,8 @@ if "results" in st.session_state:
             </span>
         </div>
         <div style="display: flex; gap: 10px;">
-            <span style="background: #374151; color: #E5E7EB; padding: 4px 12px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; border: 1px solid #4B5563;">START: {ev["timestamp"]}</span>
-            <span style="background: #374151; color: #E5E7EB; padding: 4px 12px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; border: 1px solid #4B5563;">END: {ev["ts_end"]}</span>
+            <span style="background: #374151; color: #E5E7EB; padding: 4px 12px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; border: 1px solid #4B5563;">START: {t_start}</span>
+            <span style="background: #374151; color: #E5E7EB; padding: 4px 12px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; border: 1px solid #4B5563;">END: {t_end}</span>
         </div>
     </div>
     
@@ -410,49 +399,49 @@ if "results" in st.session_state:
     <!-- Commentary Block -->
 ''' + (f'''
     <div style="background: #0F172A; border-radius: 8px; padding: 18px; margin-top: 15px; border: 1px solid #1E293B; color: #E5E7EB; line-height: 1.6; font-size: 1rem;">
-        <span style="color: #FFD700; margin-right: 10px; font-size: 1.3rem;">🎙️</span> <b>Commentary:</b> {r_match["commentary"]}
+        <span style="color: #FFD700; margin-right: 10px; font-size: 1.3rem;">🎙️</span> <b>Commentary:</b> {r.get("commentary","")}
     </div>
-''' if r_match and r_match.get("commentary") else "") + f'''
+''' if r.get("commentary") else "") + f'''
+    
     <!-- Motion Tags as Chips -->
     <div style="margin-top: 20px; display: flex; flex-wrap: wrap; gap: 10px;">
-        {"".join([f'<span style="background: #1E293B; color: #9CA3AF; padding: 5px 15px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; border: 1px solid #374151;">⚡ {h}</span>' for h in (r_match.get("motion_signature",{}).get("football_hints",[]) if r_match else [])])}
+        {"".join([f'<span style="background: #1E293B; color: #9CA3AF; padding: 5px 15px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; border: 1px solid #374151;">⚡ {h}</span>' for h in (r.get("motion_signature",{}).get("football_hints",[]) if r else [])])}
     </div>
 </div>
-''', unsafe_allow_html=True)
 
-        # Segment Action Intensity Bar Chart Wrapper
-        st.markdown('''
-<div style="margin-bottom: 50px; padding: 20px; background: rgba(17, 24, 39, 0.6); border-radius: 0 0 12px 12px; border: 1px solid #374151; border-top: none;">
+<!-- Segment Action Intensity Bar Chart Wrapper -->
+<div style="margin-bottom: 60px; padding: 20px; background: rgba(17, 24, 39, 0.6); border-radius: 0 0 12px 12px; border: 1px solid #374151; border-top: none;">
 ''', unsafe_allow_html=True)
         
-        # Data for 5+ bars using the saved scored_actions
-        raw_scores = r_match.get("scored_actions", []) if r_match else []
+        # Prepare bar chart data
+        raw_scores = r.get("scored_actions", [])
+        if not raw_scores:
+            preds = r.get("top_k_actions", [])
+            raw_scores = [{"label": p["label"], "score": p["confidence"]} for p in preds]
+
         if len(raw_scores) < 5:
-            # Pad if needed
             others = ["Pass", "Dribble", "Press", "Ball in Play", "Defending Ball"]
             existing = [p["label"] for p in raw_scores]
             for o in others:
                 if o not in existing and len(raw_scores) < 5:
-                    raw_scores.append({"label": o, "score": 0.1, "conf": 0.1})
+                    raw_scores.append({"label": o, "score": 0.1})
         
         chart_data = pd.DataFrame([{
             "Action": p["label"],
             "Intensity": p["score"]
         } for p in raw_scores])
-        
-        # Sort chart data to ensure top action is first
         chart_data = chart_data.sort_values("Intensity", ascending=True)
         
         fig_seg = px.bar(
             chart_data, x="Intensity", y="Action", orientation='h',
             color="Action", color_discrete_map=COLORS,
-            title=f"📊 Action Dominance Analysis: {ev['timestamp']} – {ev['ts_end']}"
+            title=f"📊 Intensity Analysis: {t_start} – {t_end}"
         )
         fig_seg.update_layout(
-            showlegend=False, height=300, margin=dict(l=20, r=20, t=60, b=20),
+            showlegend=False, height=280, margin=dict(l=20, r=20, t=50, b=20),
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="#9CA3AF", size=11),
-            xaxis=dict(title="Action Intensity Score (No %)", showticklabels=False, showgrid=False),
+            font=dict(color="#9CA3AF", size=10),
+            xaxis=dict(title=None, showticklabels=False, showgrid=False),
             yaxis=dict(title=None, showgrid=False)
         )
         st.plotly_chart(fig_seg, use_container_width=True, config={'displayModeBar': False})
@@ -461,29 +450,27 @@ if "results" in st.session_state:
     # ── Analytics Charts (Heatmap Only) ──────────────────────────────────────
     st.markdown("### 📈 Analytics Charts")
     
-    # Create a timeline heatmap of motion intensity with 4s markers
     hm_x = []
     hm_z = [[]]
     hm_text = []
     annotations = []
 
     for i, r in enumerate(results):
-        t_start = r["start_time"]
-        mag = r["motion_signature"].get("avg_magnitude", 0)
+        t_start_val = r["start_time"]
+        mag = r.get("motion_signature", {}).get("avg_magnitude", 0)
         
-        hm_x.append(t_start)
+        hm_x.append(t_start_val)
         hm_z[0].append(mag)
-        hm_text.append(f"{r['top_action']} ({format_timestamp(t_start)})")
+        hm_text.append(f"{r['top_action']} ({format_timestamp(t_start_val)})")
         
-        # Add annotation for events
         annotations.append(dict(
-            x=t_start,
+            x=t_start_val,
             y=0,
-            text=f"{emo(r['top_action'])} {r['top_action']} @ {format_timestamp(t_start)}",
+            text=f"{emo(r['top_action'])} {r['top_action']}",
             showarrow=True,
             arrowhead=2,
             ax=0,
-            ay=-40 - (i % 3) * 30, # Stagger labels more
+            ay=-40 - (i % 3) * 30,
             font=dict(size=10, color="#E5E7EB"),
             bgcolor="rgba(17, 24, 39, 0.85)",
             bordercolor="#374151",
@@ -510,7 +497,7 @@ if "results" in st.session_state:
         height=400,
         xaxis=dict(
             title="Video Timeline (Seconds)",
-            dtick=4, # Every 4 seconds
+            dtick=4,
             tick0=0,
             gridcolor="#374151",
             zeroline=False,
